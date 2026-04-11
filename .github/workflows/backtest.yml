@@ -14,6 +14,9 @@ on:
   schedule:
     - cron: "0 3 * * 1"
 
+permissions:
+  contents: write
+
 jobs:
   backtest:
     runs-on: ubuntu-latest
@@ -90,3 +93,47 @@ jobs:
             logs/**
             data/backtest_context.json
           if-no-files-found: warn
+
+      - name: Publish reports to backtest-reports branch
+        if: success()
+        env:
+          TARGET_BRANCH: backtest-reports
+        run: |
+          set -euo pipefail
+          ls -la reports
+
+          mkdir -p /tmp/bt_publish/reports
+          cp reports/backtest_report_*.json /tmp/bt_publish/reports/ 2>/dev/null || true
+          cp reports/auto_ml_summary_*.json /tmp/bt_publish/reports/ 2>/dev/null || true
+          test -n "$(ls -1 /tmp/bt_publish/reports/*.json 2>/dev/null | head -n 1)" || {
+            echo "No report JSON to publish."
+            exit 0
+          }
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin "${TARGET_BRANCH}" || true
+
+          if git show-ref --verify --quiet "refs/remotes/origin/${TARGET_BRANCH}"; then
+            git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+          else
+            git checkout --orphan "${TARGET_BRANCH}"
+            git rm -rf . >/dev/null 2>&1 || true
+            mkdir -p reports
+            touch reports/.gitkeep
+            git add reports/.gitkeep
+            git commit -m "chore: initialize ${TARGET_BRANCH}" || true
+          fi
+
+          mkdir -p reports
+          cp /tmp/bt_publish/reports/*.json reports/
+
+          git add reports/*.json
+          if git diff --cached --quiet; then
+            echo "No report changes to commit."
+            exit 0
+          fi
+
+          git commit -m "backtest: add reports for run ${GITHUB_RUN_ID}"
+          git push origin "${TARGET_BRANCH}"
