@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stock_scores.schema.json",
+  "title": "Stock Scores Contract",
+  "type": "object",
+  "required": ["generated_at", "scores"],
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scores": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "symbol",
+          "sector",
+          "benchmark",
+          "composite_score",
+          "technical_score",
+          "fundamental_score",
+          "news_score"
+        ],
+        "properties": {
+          "symbol": { "type": "string" },
+          "sector": { "type": "string" },
+          "benchmark": { "type": "string" },
+          "composite_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "technical_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "fundamental_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "news_score": {
+            "type": "number",
+            "minimum": -1,
+            "maximum": 1
+          },
+          "beta": { "type": ["number", "null"] },
+          "price_target_mean": { "type": ["number", "null"] },
+          "recommendation_mean": { "type": ["number", "null"] },
+          "analyst_count": { "type": ["integer", "null"] },
+          "roa": { "type": ["number", "null"] },
+          "roe": { "type": ["number", "null"] },
+          "debt_to_equity": { "type": ["number", "null"] },
+          "free_cash_flow": { "type": ["number", "null"] },
+          "current_ratio": { "type": ["number", "null"] },
+          "ema50_above_ema200": { "type": "boolean" },
+          "rsi": { "type": ["number", "null"] },
+          "macd_state": { "type": "string" },
+          "momentum_7d": { "type": ["number", "null"] },
+          "momentum_30d": { "type": ["number", "null"] },
+          "correlation_to_sector": { "type": ["number", "null"] },
+          "alerts": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

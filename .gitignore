@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# Virtual envs
+venv/
+.venv/
+
+# macOS
+.DS_Store
+
+# Runtime artifacts
+logs/
+backtest_data/
+
+# Generated data and reports
+data/*.json
+data/**/*.json
+reports/*.json
+
+# Local state
+shared_state.json
+shared_state.tmp

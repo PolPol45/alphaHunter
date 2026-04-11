@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "market_regime.schema.json",
+  "title": "Market Regime Contract",
+  "type": "object",
+  "required": [
+    "generated_at",
+    "regime",
+    "score",
+    "macro_factors",
+    "regional_correlations",
+    "volatility_sentiment",
+    "risk_flags"
+  ],
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "regime": {
+      "type": "string",
+      "enum": ["RISK_ON", "NEUTRAL", "RISK_OFF"]
+    },
+    "score": {
+      "type": "number",
+      "minimum": -1,
+      "maximum": 1
+    },
+    "macro_factors": {
+      "type": "object",
+      "required": ["fed_proxy", "inflation_proxy", "dxy", "sp500", "vix"],
+      "properties": {
+        "fed_proxy": { "type": ["number", "null"] },
+        "inflation_proxy": { "type": ["number", "null"] },
+        "dxy": { "type": ["number", "null"] },
+        "sp500": { "type": ["number", "null"] },
+        "stoxx600": { "type": ["number", "null"] },
+        "nikkei": { "type": ["number", "null"] },
+        "eem_vs_spy": { "type": ["number", "null"] },
+        "vix": { "type": ["number", "null"] },
+        "put_call_ratio": { "type": ["number", "null"] },
+        "qe_qt_proxy": { "type": ["number", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "regional_correlations": {
+      "type": "object",
+      "properties": {
+        "spx_vs_stoxx_20d": { "type": ["number", "null"] },
+        "spx_vs_nikkei_20d": { "type": ["number", "null"] },
+        "spx_vs_em_20d": { "type": ["number", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "volatility_sentiment": {
+      "type": "object",
+      "properties": {
+        "vix_regime": { "type": "string" },
+        "fear_greed_proxy": { "type": ["number", "null"] },
+        "news_sentiment_score": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "risk_flags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "label", "severity", "bias"],
+        "properties": {
+          "code": { "type": "string" },
+          "label": { "type": "string" },
+          "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+          "bias": { "type": "number" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "headline": { "type": "string" },
+        "explanation": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

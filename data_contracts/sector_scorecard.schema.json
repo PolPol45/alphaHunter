@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sector_scorecard.schema.json",
+  "title": "Sector Scorecard Contract",
+  "type": "object",
+  "required": ["generated_at", "market_regime_ref", "sectors"],
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "market_regime_ref": {
+      "type": "string"
+    },
+    "sectors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "benchmark",
+          "members",
+          "score",
+          "rank",
+          "relative_strength_20d",
+          "breadth_above_ema50",
+          "news_sentiment_score",
+          "beta_to_spy"
+        ],
+        "properties": {
+          "name": { "type": "string" },
+          "benchmark": { "type": "string" },
+          "members": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "return_5d": { "type": ["number", "null"] },
+          "return_20d": { "type": ["number", "null"] },
+          "return_60d": { "type": ["number", "null"] },
+          "relative_strength_20d": { "type": ["number", "null"] },
+          "breadth_above_ema50": { "type": ["number", "null"] },
+          "avg_volume_trend": { "type": ["number", "null"] },
+          "news_count": { "type": "integer", "minimum": 0 },
+          "news_sentiment_score": { "type": "number" },
+          "beta_to_spy": { "type": ["number", "null"] },
+          "driver_type": {
+            "type": "string",
+            "enum": ["IDIOSYNCRATIC", "MARKET_BETA", "MIXED", "UNKNOWN"]
+          },
+          "alerts": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

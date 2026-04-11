@@ -1,0 +1,72 @@
+name: Backtest
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: "Backtest start date (YYYY-MM-DD)"
+        required: true
+        default: "2025-01-01"
+      end_date:
+        description: "Backtest end date (YYYY-MM-DD)"
+        required: true
+        default: "2025-06-30"
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Configure backtest window
+        env:
+          START_DATE: ${{ github.event.inputs.start_date || '2025-01-01' }}
+          END_DATE: ${{ github.event.inputs.end_date || '2025-06-30' }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          config_path = Path("config.json")
+          cfg = json.loads(config_path.read_text())
+          cfg.setdefault("orchestrator", {})["mode"] = "backtest"
+
+          bt = cfg.setdefault("backtesting", {})
+          bt["enabled"] = True
+          bt["start_date"] = __import__("os").environ["START_DATE"]
+          bt["end_date"] = __import__("os").environ["END_DATE"]
+          bt["fees"] = {"commission_pct": 0.001}
+          bt["slippage_model"] = {"default_bps": 10.0}
+
+          config_path.write_text(json.dumps(cfg, indent=2))
+          print(f"Configured backtest: {bt['start_date']} -> {bt['end_date']}")
+          PY
+
+      - name: Run orchestrator backtest
+        run: |
+          python orchestrator.py
+
+      - name: Upload backtest reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backtest-reports-${{ github.run_id }}
+          path: |
+            reports/backtest_report_*.json
+            reports/*.json
+          if-no-files-found: warn

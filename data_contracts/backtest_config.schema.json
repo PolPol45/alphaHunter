@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BacktestConfig",
+  "type": "object",
+  "required": ["enabled", "start_date", "end_date", "fees", "slippage_model", "universe_snapshot"],
+  "properties": {
+    "enabled": {"type": "boolean"},
+    "start_date": {"type": "string", "format": "date"},
+    "end_date": {"type": "string", "format": "date"},
+    "fees": {
+      "type": "object",
+      "required": ["commission_pct"],
+      "properties": {
+        "commission_pct": {"type": "number", "minimum": 0}
+      }
+    },
+    "slippage_model": {
+      "type": "object",
+      "required": ["default_bps"],
+      "properties": {
+        "default_bps": {"type": "number", "minimum": 0}
+      }
+    },
+    "universe_snapshot": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1
+    }
+  }
+}

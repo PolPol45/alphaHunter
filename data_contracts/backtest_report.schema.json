@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BacktestReport",
+  "type": "object",
+  "required": ["report_type", "generated_at", "window", "constraints", "metrics", "equity_curve", "summary"],
+  "properties": {
+    "report_type": {"type": "string", "const": "backtest"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "window": {
+      "type": "object",
+      "required": ["start_date", "end_date"],
+      "properties": {
+        "start_date": {"type": "string", "format": "date"},
+        "end_date": {"type": "string", "format": "date"}
+      }
+    },
+    "constraints": {"type": "object"},
+    "metrics": {
+      "type": "object",
+      "required": ["sharpe", "sortino", "max_drawdown", "calmar", "win_rate", "turnover"],
+      "properties": {
+        "sharpe": {"type": "number"},
+        "sortino": {"type": "number"},
+        "max_drawdown": {"type": "number"},
+        "calmar": {"type": "number"},
+        "win_rate": {"type": "number"},
+        "turnover": {"type": "number"}
+      }
+    },
+    "equity_curve": {
+      "type": "array",
+      "items": {"type": "number"}
+    },
+    "summary": {"type": "object"}
+  }
+}
