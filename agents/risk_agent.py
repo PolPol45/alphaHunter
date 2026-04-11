@@ -9,7 +9,7 @@ Generates `validated_signals.json` for Phase 5 (ExecutionAgent) partitioned by
 
 from __future__ import annotations
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from agents.base_agent import BaseAgent, DATA_DIR
 
@@ -38,6 +38,10 @@ class RiskAgent(BaseAgent):
                 "bear_bankrupt": 0.66,
             },
         )
+        self._market_vol_extreme_vix = float(self._risk_cfg.get("market_vol_extreme_vix", 28.0))
+        self._rolling_window_days = int(self._risk_cfg.get("strategy_weight_window_days", 21))
+        self._strategy_weight_min = float(self._risk_cfg.get("strategy_weight_min", 0.75))
+        self._strategy_weight_max = float(self._risk_cfg.get("strategy_weight_max", 1.25))
 
     def run(self) -> bool:
         self.mark_running()
@@ -63,16 +67,20 @@ class RiskAgent(BaseAgent):
             fed = macro_doc.get("series", {}).get("fed_funds", {}).get("value", 4) or 4
             vix = macro_doc.get("series", {}).get("vix", {}).get("value", 15) or 15
             dxy = macro_doc.get("series", {}).get("dxy", {}).get("value", 100) or 100
+            market_bias = float(macro_doc.get("market_bias", 0.0) or 0.0)
             
             risk_off = vix > 25 or (fed > 5.0 and dxy > 105)
+            market_vol_extreme = vix >= self._market_vol_extreme_vix
 
             # 4. Generate structured retail & institutional output
             retail_validated = self._process_mode(
-                "retail", self._retail_cfg, port_retail, raw_bull_signals, raw_bear_signals, raw_crypto_signals, risk_off, mkt_data, returns_map
+                "retail", self._retail_cfg, port_retail, raw_bull_signals, raw_bear_signals, raw_crypto_signals,
+                risk_off, market_bias, market_vol_extreme, mkt_data, returns_map
             )
             
             inst_validated = self._process_mode(
-                "institutional", self._inst_cfg, port_inst, raw_bull_signals, raw_bear_signals, raw_crypto_signals, risk_off, mkt_data, returns_map
+                "institutional", self._inst_cfg, port_inst, raw_bull_signals, raw_bear_signals, raw_crypto_signals,
+                risk_off, market_bias, market_vol_extreme, mkt_data, returns_map
             )
 
             validated = {
@@ -106,7 +114,7 @@ class RiskAgent(BaseAgent):
     def _extract_bear(self, bear_sig: dict) -> list:
         alloc = bear_sig.get("allocations", {})
         mode = str(self.config.get("bear_strategy", {}).get("mode", "full")).strip().lower()
-        hedge_only = mode == "bear_hedge_only"
+        hedge_only = mode in {"bear_hedge_only", "hedge_only"}
 
         if hedge_only:
             out = alloc.get("hedge_etfs", [])[:5]
@@ -167,6 +175,8 @@ class RiskAgent(BaseAgent):
         bear: list,
         crypto: list,
         risk_off: bool,
+        market_bias: float,
+        market_vol_extreme: bool,
         mkt_data: dict,
         returns_map: dict,
     ) -> dict:
@@ -186,6 +196,7 @@ class RiskAgent(BaseAgent):
             cap = sub_cfg.get("capital", 0.0)
             # Base budget for this bucket (reserve preserved)
             base_stake = (cap * 0.8) / max_picks
+            base_stake *= self._strategy_weight_multiplier(sub_name, portfolio)
 
             # If total_cash is running low, truncate the global stake size (e.g. system is fully invested)
             if base_stake > total_cash:
@@ -238,6 +249,19 @@ class RiskAgent(BaseAgent):
                 # Macro penalty
                 if risk_off and not is_bear and score < 0.70:
                     continue # Reject weak longs during risk off
+
+                # Regime filter: only trade pro-risk longs in positive bias and non-extreme vol
+                if signal_type == "BUY" and source in {"bull", "crypto"}:
+                    if market_bias <= 0.0 or market_vol_extreme:
+                        continue
+
+                # Bear short filter: only in true risk-off
+                if source in {"bear_short", "bear_bankrupt"} and signal_type == "SELL" and not risk_off:
+                    continue
+
+                # Multi-timeframe confirmation (1d + 4h trend alignment)
+                if not self._multi_tf_confirm(sym, signal_type, mkt_data):
+                    continue
 
                 # Correlation clustering / covariance cap gate
                 if not self._passes_correlation_gate(sym, selected_symbols, returns_map):
@@ -297,6 +321,67 @@ class RiskAgent(BaseAgent):
         process_candidates(bear, "bear", max_picks=5, is_bear=True)
 
         return validated
+
+    def _strategy_weight_multiplier(self, sub_name: str, portfolio: dict) -> float:
+        trades = portfolio.get("trades", []) or []
+        if not trades:
+            return 1.0
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(days=self._rolling_window_days)
+        rows = []
+        for t in trades:
+            bucket = str(t.get("strategy_bucket", "")).lower()
+            if bucket != sub_name:
+                continue
+            ts = t.get("timestamp")
+            if not ts:
+                continue
+            try:
+                dt = datetime.fromisoformat(ts)
+            except Exception:
+                continue
+            if dt < cutoff:
+                continue
+            rows.append(t)
+        if len(rows) < 8:
+            return 1.0
+
+        realized = [float(t.get("realized_pnl", 0.0)) for t in rows if t.get("realized_pnl") is not None]
+        if not realized:
+            return 1.0
+        gross = sum(abs(float(t.get("notional", 0.0))) for t in rows)
+        if gross <= 0:
+            return 1.0
+        edge = sum(realized) / gross  # normalized pnl
+        # map edge roughly into multiplier band
+        raw = 1.0 + (edge * 10.0)
+        return max(self._strategy_weight_min, min(self._strategy_weight_max, raw))
+
+    @staticmethod
+    def _multi_tf_confirm(symbol: str, signal_type: str, mkt_data: dict) -> bool:
+        asset = (mkt_data.get("assets", {}) or {}).get(symbol, {})
+        d1 = asset.get("ohlcv_1d", [])[-6:]
+        h4 = asset.get("ohlcv_4h", [])[-12:]
+        if len(d1) < 3 or len(h4) < 6:
+            return True
+
+        d1_first = float(d1[0].get("c", 0.0))
+        d1_last = float(d1[-1].get("c", 0.0))
+        h4_first = float(h4[0].get("c", 0.0))
+        h4_last = float(h4[-1].get("c", 0.0))
+        if min(d1_first, d1_last, h4_first, h4_last) <= 0:
+            return True
+
+        d1_up = d1_last > d1_first
+        h4_up = h4_last > h4_first
+        d1_down = d1_last < d1_first
+        h4_down = h4_last < h4_first
+
+        if signal_type == "BUY":
+            return d1_up and h4_up
+        if signal_type == "SELL":
+            return d1_down and h4_down
+        return True
 
     @staticmethod
     def _rolling_returns(closes: list[float]) -> list[float]:

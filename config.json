@@ -840,25 +840,29 @@
     }
   },
   "risk_agent": {
-    "correlation_threshold": 0.85,
+    "correlation_threshold": 0.75,
     "covariance_penalty": 0.35,
     "target_vol_daily": 0.02,
     "min_vol_floor": 0.003,
     "max_asset_exposure_pct": 0.08,
     "max_sub_exposure_pct": 0.45,
+    "market_vol_extreme_vix": 28.0,
+    "strategy_weight_window_days": 21,
+    "strategy_weight_min": 0.75,
+    "strategy_weight_max": 1.25,
     "min_score_by_bucket": {
-      "crypto": 0.58,
-      "bull": 0.62,
+      "crypto": 0.64,
+      "bull": 0.68,
       "bear_hedge": 0.55,
-      "bear_short": 0.68,
+      "bear_short": 0.72,
       "bear_bankrupt": 0.66
     }
   },
   "turnover_control": {
     "enabled": true,
-    "rebalance_threshold_pct": 0.05,
-    "min_holding_hours": 24,
-    "cooldown_after_close_hours": 12,
+    "rebalance_threshold_pct": 0.08,
+    "min_holding_hours": 48,
+    "cooldown_after_close_hours": 24,
     "frequent_trade_window_hours": 72,
     "max_trades_per_symbol": 4
   },
