@@ -8,6 +8,7 @@ Generates `validated_signals.json` for Phase 5 (ExecutionAgent) partitioned by
 """
 
 from __future__ import annotations
+import math
 from datetime import datetime, timezone
 
 from agents.base_agent import BaseAgent, DATA_DIR
@@ -18,6 +19,25 @@ class RiskAgent(BaseAgent):
         self._port_cfg = self.config.get("portfolios", {})
         self._retail_cfg = self._port_cfg.get("personal", {})
         self._inst_cfg = self._port_cfg.get("institutional", {})
+        self._risk_cfg = self.config.get("risk_agent", {})
+
+        # PR2 defaults (used when config keys are missing)
+        self._corr_threshold = float(self._risk_cfg.get("correlation_threshold", 0.85))
+        self._covariance_penalty = float(self._risk_cfg.get("covariance_penalty", 0.35))
+        self._target_vol_daily = float(self._risk_cfg.get("target_vol_daily", 0.02))
+        self._min_vol_floor = float(self._risk_cfg.get("min_vol_floor", 0.003))
+        self._max_asset_exposure_pct = float(self._risk_cfg.get("max_asset_exposure_pct", 0.08))
+        self._max_sub_exposure_pct = float(self._risk_cfg.get("max_sub_exposure_pct", 0.45))
+        self._min_score_by_bucket = self._risk_cfg.get(
+            "min_score_by_bucket",
+            {
+                "crypto": 0.58,
+                "bull": 0.62,
+                "bear_hedge": 0.55,
+                "bear_short": 0.68,
+                "bear_bankrupt": 0.66,
+            },
+        )
 
     def run(self) -> bool:
         self.mark_running()
@@ -37,6 +57,7 @@ class RiskAgent(BaseAgent):
             raw_bull_signals = self._extract_bull(bull_sig)
             raw_bear_signals = self._extract_bear(bear_sig)
             raw_crypto_signals = self._extract_crypto(crypto_sig)
+            returns_map = self._build_returns_map(mkt_data)
 
             # 3. Macro & Correlation Filter rules
             fed = macro_doc.get("series", {}).get("fed_funds", {}).get("value", 4) or 4
@@ -47,11 +68,11 @@ class RiskAgent(BaseAgent):
 
             # 4. Generate structured retail & institutional output
             retail_validated = self._process_mode(
-                "retail", self._retail_cfg, port_retail, raw_bull_signals, raw_bear_signals, raw_crypto_signals, risk_off, mkt_data
+                "retail", self._retail_cfg, port_retail, raw_bull_signals, raw_bear_signals, raw_crypto_signals, risk_off, mkt_data, returns_map
             )
             
             inst_validated = self._process_mode(
-                "institutional", self._inst_cfg, port_inst, raw_bull_signals, raw_bear_signals, raw_crypto_signals, risk_off, mkt_data
+                "institutional", self._inst_cfg, port_inst, raw_bull_signals, raw_bear_signals, raw_crypto_signals, risk_off, mkt_data, returns_map
             )
 
             validated = {
@@ -84,6 +105,16 @@ class RiskAgent(BaseAgent):
 
     def _extract_bear(self, bear_sig: dict) -> list:
         alloc = bear_sig.get("allocations", {})
+        mode = str(self.config.get("bear_strategy", {}).get("mode", "full")).strip().lower()
+        hedge_only = mode == "bear_hedge_only"
+
+        if hedge_only:
+            out = alloc.get("hedge_etfs", [])[:5]
+            for it in out:
+                it["_agent_source"] = "bear_hedge"
+                it["_signal_type"] = "BUY"
+            return out
+
         out = alloc.get("hedge_etfs", [])[:3] + alloc.get("short_candidates", [])[:3]
         for it in out:
             it["_agent_source"] = "bear"
@@ -127,28 +158,50 @@ class RiskAgent(BaseAgent):
             out.append(n)
         return out
 
-    def _process_mode(self, mode_name: str, config: dict, portfolio: dict, bull: list, bear: list, crypto: list, risk_off: bool, mkt_data: dict) -> dict:
+    def _process_mode(
+        self,
+        mode_name: str,
+        config: dict,
+        portfolio: dict,
+        bull: list,
+        bear: list,
+        crypto: list,
+        risk_off: bool,
+        mkt_data: dict,
+        returns_map: dict,
+    ) -> dict:
         validated = {}
         subs = config.get("sub", {})
         total_cash = portfolio.get("cash", 0.0)
-        
+        mode_equity = float(portfolio.get("total_equity") or portfolio.get("initial_capital") or total_cash or 0.0)
+        selected_symbols = []
+        sub_exposure = {"crypto": 0.0, "bull": 0.0, "bear": 0.0}
+
         # Helper inner function to process a list of candidates
         def process_candidates(candidates, sub_name, max_picks=3, is_bear=False):
             sub_cfg = subs.get(sub_name, {})
             if not sub_cfg.get("active"):
                 return
-            
+
             cap = sub_cfg.get("capital", 0.0)
-            stake_size = (cap * 0.8) / max_picks # 80% allocation, 20% reserve
-            
+            # Base budget for this bucket (reserve preserved)
+            base_stake = (cap * 0.8) / max_picks
+
             # If total_cash is running low, truncate the global stake size (e.g. system is fully invested)
-            if stake_size > total_cash:
-                stake_size = max(0, total_cash * 0.1) # Take only 10% of what's left
-            if stake_size < 10.0:
+            if base_stake > total_cash:
+                base_stake = max(0, total_cash * 0.1) # Take only 10% of what's left
+            if base_stake < 10.0:
                 return # Insufficient funds
-                
+
+            # Noise reduction: sort by quality descending
+            candidates_sorted = sorted(
+                candidates,
+                key=lambda x: float(x.get("composite_score", 0.0)),
+                reverse=True,
+            )
+
             count = 0
-            for item in candidates:
+            for item in candidates_sorted:
                 if count >= max_picks: break
                 sym = item.get("symbol")
                 if not sym or sym in validated: continue
@@ -172,16 +225,45 @@ class RiskAgent(BaseAgent):
                         
                 if not price or price <= 0:
                     continue # No price, cannot calculate quantity
-                
-                score = item.get("composite_score", 0.5)
+
+                score = float(item.get("composite_score", 0.5) or 0.5)
                 signal_type = item.get("_signal_type", "BUY")
-                
+                source = item.get("_agent_source", sub_name)
+
+                # Signal noise filter (bucket-specific minimum)
+                score_floor = float(self._min_score_by_bucket.get(source, self._min_score_by_bucket.get(sub_name, 0.55)))
+                if score < score_floor:
+                    continue
+
                 # Macro penalty
                 if risk_off and not is_bear and score < 0.70:
                     continue # Reject weak longs during risk off
-                    
+
+                # Correlation clustering / covariance cap gate
+                if not self._passes_correlation_gate(sym, selected_symbols, returns_map):
+                    continue
+
+                # Volatility targeting + covariance penalty on size
+                vol_pct = self._estimate_volatility_pct(sym, mkt_data)
+                corr_penalty = self._correlation_penalty(sym, selected_symbols, returns_map)
+                sizing_mult = self._sizing_multiplier(score, vol_pct, corr_penalty)
+                stake_size = base_stake * sizing_mult
+
+                # Max exposure per asset (global) and per sub-bucket
+                max_asset_abs = mode_equity * self._max_asset_exposure_pct
+                if signal_type == "BUY":
+                    stake_size = min(stake_size, max_asset_abs)
+                sub_cap_limit = cap * self._max_sub_exposure_pct
+                allowed_sub_remaining = max(0.0, sub_cap_limit - sub_exposure.get(sub_name, 0.0))
+                stake_size = min(stake_size, allowed_sub_remaining)
+                stake_size = min(stake_size, total_cash)
+                if stake_size < 10.0:
+                    continue
+
                 quantity = round(stake_size / price, 6)
-                
+                if quantity <= 0:
+                    continue
+
                 # Stop loss / Take profit estimation
                 sl = price * 0.95 if signal_type == "BUY" else price * 1.05
                 tp = price * 1.08 if signal_type == "BUY" else price * 0.92
@@ -196,13 +278,113 @@ class RiskAgent(BaseAgent):
                     "position_size_usdt": round(stake_size, 4),
                     "quantity": quantity,
                     "rejection_reason": None,
-                    "agent_source": item.get("_agent_source", sub_name)
+                    "agent_source": source,
+                    "strategy_bucket": (
+                        "crypto"
+                        if sub_name == "crypto"
+                        else ("bull" if sub_name == "bull" else "bear")
+                    ),
+                    "volatility_pct": round(vol_pct, 6),
+                    "corr_penalty": round(corr_penalty, 6),
                 }
+                selected_symbols.append(sym)
+                sub_exposure[sub_name] = sub_exposure.get(sub_name, 0.0) + stake_size
                 count += 1
-                
+
         # Process each group matching the subconfig
         process_candidates(crypto, "crypto", max_picks=5, is_bear=False)
         process_candidates(bull, "bull", max_picks=4, is_bear=False)
         process_candidates(bear, "bear", max_picks=5, is_bear=True)
-        
+
         return validated
+
+    @staticmethod
+    def _rolling_returns(closes: list[float]) -> list[float]:
+        out = []
+        for i in range(1, len(closes)):
+            prev = float(closes[i - 1])
+            cur = float(closes[i])
+            if prev > 0:
+                out.append((cur / prev) - 1.0)
+        return out
+
+    def _build_returns_map(self, mkt_data: dict) -> dict:
+        out = {}
+        assets = mkt_data.get("assets", {})
+        for sym, info in assets.items():
+            candles = info.get("ohlcv_4h") or info.get("ohlcv_1d") or []
+            closes = [float(c.get("c", 0.0)) for c in candles[-80:] if c.get("c")]
+            if len(closes) >= 20:
+                out[sym] = self._rolling_returns(closes)
+        return out
+
+    def _passes_correlation_gate(self, symbol: str, selected_symbols: list[str], returns_map: dict) -> bool:
+        if not selected_symbols:
+            return True
+        cand = returns_map.get(symbol)
+        if not cand:
+            return True
+        for peer in selected_symbols:
+            p = returns_map.get(peer)
+            if not p:
+                continue
+            corr = self._pearson_corr(cand, p)
+            if corr is not None and abs(corr) >= self._corr_threshold:
+                return False
+        return True
+
+    def _correlation_penalty(self, symbol: str, selected_symbols: list[str], returns_map: dict) -> float:
+        if not selected_symbols:
+            return 0.0
+        cand = returns_map.get(symbol)
+        if not cand:
+            return 0.0
+        corrs = []
+        for peer in selected_symbols:
+            p = returns_map.get(peer)
+            if not p:
+                continue
+            corr = self._pearson_corr(cand, p)
+            if corr is not None:
+                corrs.append(abs(corr))
+        if not corrs:
+            return 0.0
+        return sum(corrs) / len(corrs)
+
+    def _estimate_volatility_pct(self, symbol: str, mkt_data: dict) -> float:
+        info = mkt_data.get("assets", {}).get(symbol, {})
+        candles = info.get("ohlcv_4h") or info.get("ohlcv_1d") or []
+        closes = [float(c.get("c", 0.0)) for c in candles[-80:] if c.get("c")]
+        rets = self._rolling_returns(closes)
+        if len(rets) < 5:
+            return self._target_vol_daily
+        mu = sum(rets) / len(rets)
+        var = sum((r - mu) ** 2 for r in rets) / max(1, len(rets) - 1)
+        vol = math.sqrt(max(var, 0.0))
+        return max(vol, self._min_vol_floor)
+
+    def _sizing_multiplier(self, score: float, vol_pct: float, corr_penalty: float) -> float:
+        # score in [0,1] → multiplier in [0.7, 1.3]
+        score_mult = 0.7 + max(0.0, min(1.0, score)) * 0.6
+        # target-vol sizing, clipped
+        vol_mult_raw = self._target_vol_daily / max(vol_pct, self._min_vol_floor)
+        vol_mult = max(0.5, min(1.5, vol_mult_raw))
+        # covariance/correlation penalty
+        corr_mult = 1.0 - min(0.9, corr_penalty * self._covariance_penalty)
+        return max(0.35, min(1.6, score_mult * vol_mult * corr_mult))
+
+    @staticmethod
+    def _pearson_corr(a: list[float], b: list[float]) -> float | None:
+        n = min(len(a), len(b))
+        if n < 5:
+            return None
+        x = a[-n:]
+        y = b[-n:]
+        mx = sum(x) / n
+        my = sum(y) / n
+        vx = sum((i - mx) ** 2 for i in x)
+        vy = sum((j - my) ** 2 for j in y)
+        if vx <= 0 or vy <= 0:
+            return None
+        cov = sum((x[i] - mx) * (y[i] - my) for i in range(n))
+        return cov / math.sqrt(vx * vy)

@@ -36,6 +36,7 @@ class ExecutionAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__("execution_agent")
         self._sim = self.config["simulation"]
+        self._turnover_cfg = self.config.get("turnover_control", {})
 
         self._ibkr         = None
         self._ibkr_enabled = self.config.get("ibkr", {}).get("enabled", False)
@@ -312,6 +313,18 @@ class ExecutionAgent(BaseAgent):
         existing_side = existing_pos.get("side", "long")
         desired_side = "long" if signal_type == "BUY" else "short"
 
+        allow_trade, block_reason = self._turnover_gate(
+            mode=mode,
+            symbol=symbol,
+            vsig=vsig,
+            portfolio=portfolio,
+            existing_pos=existing_pos,
+            desired_side=desired_side,
+        )
+        if not allow_trade:
+            self.logger.info(f"[{mode}] Turnover gate blocked {symbol}: {block_reason}")
+            return
+
         if existing_qty > 0 and existing_side == desired_side:
             self.logger.debug(f"[{mode}] Already {desired_side} {symbol} — skipping duplicate {signal_type}")
             return
@@ -363,6 +376,8 @@ class ExecutionAgent(BaseAgent):
             "timestamp":     self._now_iso(),
             "reason":        f"SIGNAL_{signal_type}",
             "source":        "ibkr",
+            "agent_source":  vsig.get("agent_source"),
+            "strategy_bucket": vsig.get("strategy_bucket"),
             "ibkr_order_id": fill["order_id"],
             "mode":          mode,
         }
@@ -380,6 +395,8 @@ class ExecutionAgent(BaseAgent):
         pos["stop_loss_price"]    = round(stop_price, 4)
         pos["current_price"]      = round(fill_price, 4)
         pos["position_value_usdt"] = round(new_qty * fill_price, 4)
+        pos["agent_source"]       = vsig.get("agent_source", pos.get("agent_source"))
+        pos["strategy_bucket"]    = vsig.get("strategy_bucket", pos.get("strategy_bucket"))
         # P1 — store exit params only on the initial fill
         if old_qty == 0:
             pos["entry_atr"]         = round(float(vsig.get("atr", fill_price * 0.02)), 6)
@@ -452,6 +469,18 @@ class ExecutionAgent(BaseAgent):
         existing_side = existing_pos.get("side", "long")
         desired_side  = "long" if signal_type == "BUY" else "short"
 
+        allow_trade, block_reason = self._turnover_gate(
+            mode=mode,
+            symbol=symbol,
+            vsig=vsig,
+            portfolio=portfolio,
+            existing_pos=existing_pos,
+            desired_side=desired_side,
+        )
+        if not allow_trade:
+            self.logger.info(f"[{mode}] Turnover gate blocked {symbol}: {block_reason}")
+            return
+
         if existing_qty > 0 and existing_side == desired_side:
             self.logger.debug(f"[{mode}][sim] Already {desired_side} {symbol} — skipping duplicate {signal_type}")
             return
@@ -501,6 +530,8 @@ class ExecutionAgent(BaseAgent):
         pos["stop_loss_price"]    = round(stop_loss, 4)
         pos["current_price"]      = round(fill_price, 4)
         pos["position_value_usdt"] = round(new_qty * fill_price, 4)
+        pos["agent_source"]       = vsig.get("agent_source", pos.get("agent_source"))
+        pos["strategy_bucket"]    = vsig.get("strategy_bucket", pos.get("strategy_bucket"))
         # P1 — store exit params only on the initial fill (old_qty == 0)
         if old_qty == 0:
             pos["entry_atr"]        = round(float(vsig.get("atr", fill_price * 0.02)), 6)
@@ -519,6 +550,8 @@ class ExecutionAgent(BaseAgent):
             "timestamp":     self._now_iso(),
             "reason":        f"SIGNAL_{signal_type}",
             "source":        "simulation",
+            "agent_source":  vsig.get("agent_source"),
+            "strategy_bucket": vsig.get("strategy_bucket"),
             "mode":          mode,
         })
         self.logger.info(
@@ -794,6 +827,8 @@ class ExecutionAgent(BaseAgent):
             "realized_pnl": round(realized, 4),
             "timestamp":    self._now_iso(),
             "reason":       reason,
+            "agent_source": pos.get("agent_source"),
+            "strategy_bucket": pos.get("strategy_bucket"),
         })
         portfolio["realized_pnl"] = round(portfolio.get("realized_pnl", 0.0) + realized, 4)
 
@@ -1356,3 +1391,79 @@ class ExecutionAgent(BaseAgent):
             "slippage_pct": float(self._sim.get("slippage_pct", 0.001)),
             "commission_pct": float(self._sim.get("commission_pct", 0.001)),
         }
+
+    def _turnover_gate(
+        self,
+        mode: str,
+        symbol: str,
+        vsig: dict,
+        portfolio: dict,
+        existing_pos: dict,
+        desired_side: str,
+    ) -> tuple[bool, str | None]:
+        cfg = self._turnover_cfg
+        if not bool(cfg.get("enabled", True)):
+            return True, None
+
+        min_holding_hours = float(cfg.get("min_holding_hours", 24.0))
+        cooldown_after_close_hours = float(cfg.get("cooldown_after_close_hours", 12.0))
+        frequent_window_hours = float(cfg.get("frequent_trade_window_hours", 72.0))
+        max_trades_per_symbol = int(cfg.get("max_trades_per_symbol", 4))
+        rebalance_threshold_pct = float(cfg.get("rebalance_threshold_pct", 0.05))
+
+        now = self._now()
+        existing_qty = float(existing_pos.get("quantity", 0.0) or 0.0)
+        existing_side = existing_pos.get("side", "long")
+
+        # 1) Minimum holding period before reversal
+        if existing_qty > 0 and existing_side != desired_side:
+            opened_at = existing_pos.get("opened_at")
+            hours_open = self._hours_since(opened_at, now)
+            if hours_open is not None and hours_open < min_holding_hours:
+                return False, f"min_holding_period_not_reached ({hours_open:.1f}h<{min_holding_hours:.1f}h)"
+
+        # 2) Rebalance threshold for same-side updates
+        if existing_qty > 0 and existing_side == desired_side:
+            current_notional = abs(existing_qty * float(existing_pos.get("current_price", existing_pos.get("avg_entry_price", 0.0) or 0.0)))
+            target_notional = abs(float(vsig.get("position_size_usdt", 0.0)))
+            if current_notional > 0:
+                diff_pct = abs(target_notional - current_notional) / current_notional
+                if diff_pct < rebalance_threshold_pct:
+                    return False, f"rebalance_threshold_not_met ({diff_pct:.3f}<{rebalance_threshold_pct:.3f})"
+
+        trades = portfolio.get("trades", []) or []
+        symbol_trades = [t for t in trades if t.get("symbol") == symbol and t.get("timestamp")]
+        symbol_trades_sorted = sorted(symbol_trades, key=lambda t: str(t.get("timestamp")), reverse=True)
+
+        # 3) Cooldown after last close
+        for t in symbol_trades_sorted:
+            reason = str(t.get("reason", ""))
+            if reason.startswith("TAKE_PROFIT") or reason.startswith("STOP_LOSS") or reason.startswith("SIGNAL_"):
+                hours_since_close = self._hours_since(t.get("timestamp"), now)
+                if hours_since_close is not None and hours_since_close < cooldown_after_close_hours and existing_qty <= 0:
+                    return False, f"cooldown_after_close ({hours_since_close:.1f}h<{cooldown_after_close_hours:.1f}h)"
+                break
+
+        # 4) Frequent-trade penalty
+        recent_count = 0
+        for t in symbol_trades_sorted:
+            hours = self._hours_since(t.get("timestamp"), now)
+            if hours is None:
+                continue
+            if hours <= frequent_window_hours:
+                recent_count += 1
+        if recent_count >= max_trades_per_symbol:
+            return False, f"frequent_trade_penalty ({recent_count}>={max_trades_per_symbol} in {frequent_window_hours:.0f}h)"
+
+        return True, None
+
+    @staticmethod
+    def _hours_since(ts: str | None, now: datetime) -> float | None:
+        if not ts:
+            return None
+        try:
+            dt = datetime.fromisoformat(ts)
+            delta = now - dt
+            return max(0.0, delta.total_seconds() / 3600.0)
+        except Exception:
+            return None

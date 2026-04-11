@@ -350,6 +350,7 @@ class BacktestingAgent(BaseAgent):
         inst = self.read_json(DATA_DIR / "portfolio_institutional.json")
         all_trades = retail.get("trades", []) + inst.get("trades", [])
         avg_eq = sum(equity) / len(equity) if equity else 0.0
+        strategy_breakdown = self._strategy_breakdown(all_trades, avg_eq)
         return {
             "report_type": "backtest",
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -373,7 +374,30 @@ class BacktestingAgent(BaseAgent):
                 "final_equity": round(equity[-1], 4) if equity else 0.0,
                 "start_equity": round(equity[0], 4) if equity else 0.0,
             },
+            "strategy_breakdown": strategy_breakdown,
         }
+
+    def _strategy_breakdown(self, trades: list[dict], avg_equity: float) -> dict:
+        buckets = {"bull": [], "bear": [], "crypto": [], "unknown": []}
+        for t in trades:
+            bucket = str(t.get("strategy_bucket") or "unknown").lower()
+            if bucket not in buckets:
+                bucket = "unknown"
+            buckets[bucket].append(t)
+
+        out = {}
+        for name, rows in buckets.items():
+            closed = [r for r in rows if r.get("realized_pnl") is not None]
+            realized_pnl = sum(float(r.get("realized_pnl", 0.0)) for r in closed)
+            gross_notional = sum(abs(float(r.get("notional", 0.0))) for r in rows)
+            out[name] = {
+                "trades": len(rows),
+                "closed_trades": len(closed),
+                "realized_pnl": round(realized_pnl, 4),
+                "win_rate": round(win_rate(rows), 6),
+                "turnover": round(gross_notional / avg_equity, 6) if avg_equity > 0 else 0.0,
+            }
+        return out
 
     def _reset_runtime_state(self) -> None:
         # Backtest starts from a clean portfolio state.

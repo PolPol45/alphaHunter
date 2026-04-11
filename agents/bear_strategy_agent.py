@@ -19,6 +19,7 @@ class BearStrategyAgent(BaseAgent):
     def __init__(self) -> None:
         super().__init__("bear_strategy_agent")
         cfg = self.config.get("bear_strategy", {})
+        self.mode = cfg.get("mode", "full")
         mu = self.config.get("master_universe", {})
         
         self.etf_hedge       = mu.get("etf_hedge",            [])
@@ -90,6 +91,12 @@ class BearStrategyAgent(BaseAgent):
                     
                     if bad_flags >= 2:
                         altman_results.append(item)
+
+            # PR 3: Se in modalità hedge_only, annulla i segnali direzionali short
+            if self.mode == "hedge_only":
+                self.logger.info("Modalità hedge_only attiva: filtraggio segnali short e bankruptcy")
+                short_results = []
+                altman_results = []
 
             # Sort and allocate
             # Hedging: highest composite_score (we want the hedge to be performing well in Bear)

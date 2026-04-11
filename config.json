@@ -818,6 +818,8 @@
   },
   "bear_strategy": {
     "enabled": true,
+    "mode": "hedge_only",
+    "hedge_capital_pct": 0.02,
     "signal_threshold": 0.55,
     "altman_red_zone": 1.81,
     "altman_grey_zone": 2.99,
@@ -836,6 +838,29 @@
         "equities_distressed"
       ]
     }
+  },
+  "risk_agent": {
+    "correlation_threshold": 0.85,
+    "covariance_penalty": 0.35,
+    "target_vol_daily": 0.02,
+    "min_vol_floor": 0.003,
+    "max_asset_exposure_pct": 0.08,
+    "max_sub_exposure_pct": 0.45,
+    "min_score_by_bucket": {
+      "crypto": 0.58,
+      "bull": 0.62,
+      "bear_hedge": 0.55,
+      "bear_short": 0.68,
+      "bear_bankrupt": 0.66
+    }
+  },
+  "turnover_control": {
+    "enabled": true,
+    "rebalance_threshold_pct": 0.05,
+    "min_holding_hours": 24,
+    "cooldown_after_close_hours": 12,
+    "frequent_trade_window_hours": 72,
+    "max_trades_per_symbol": 4
   },
   "alpha_hunter": {
     "enabled": true,
@@ -920,7 +945,7 @@
     }
   },
   "backtesting": {
-    "enabled": false,
+    "enabled": true,
     "start_date": "2025-01-01",
     "end_date": "2025-06-30",
     "fees": {
