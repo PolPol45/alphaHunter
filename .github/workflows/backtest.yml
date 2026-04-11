@@ -18,13 +18,15 @@ jobs:
   backtest:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -61,12 +63,22 @@ jobs:
         run: |
           python orchestrator.py
 
+      - name: Verify backtest report exists
+        run: |
+          ls -la reports || true
+          test -n "$(ls -1 reports/backtest_report_*.json 2>/dev/null | head -n 1)" || {
+            echo "No backtest report generated in reports/."
+            exit 1
+          }
+
       - name: Upload backtest reports artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: backtest-reports-${{ github.run_id }}
           path: |
             reports/backtest_report_*.json
             reports/*.json
+            logs/**
+            data/backtest_context.json
           if-no-files-found: warn
