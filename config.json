@@ -139,7 +139,7 @@
     "report_interval_seconds": 3600,
     "agent_timeout_seconds": 120,
     "strategy_cadence": 10,
-    "mode": "backtest"
+    "mode": "live_cycle"
   },
   "news_data": {
     "enabled": true,
@@ -920,7 +920,7 @@
     }
   },
   "backtesting": {
-    "enabled": true,
+    "enabled": false,
     "start_date": "2025-01-01",
     "end_date": "2025-06-30",
     "fees": {
