@@ -26,8 +26,9 @@ import os
 import pathlib
 import signal
 import sys
+import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 # Ensure trading_bot/ is on the path so `agents.*` imports resolve
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
@@ -47,9 +48,13 @@ from agents.bear_strategy_agent import BearStrategyAgent
 from agents.crypto_strategy_agent import CryptoStrategyAgent
 from agents.portfolio_manager import PortfolioManager
 from agents.backtesting_agent import BacktestingAgent
+from agents.feature_store_agent import FeatureStoreAgent
+from agents.ml_strategy_agent import MLStrategyAgent
+from agents.adaptive_learner import AdaptiveLearner
 from agents.base_agent import (
     BASE_DIR, DATA_DIR, LOGS_DIR, REPORTS_DIR, SHARED_STATE_PATH, CONFIG_PATH
 )
+from backtesting.auto_ml_pipeline import AutoMLBacktestPipeline
 
 BANNER = """
 ╔══════════════════════════════════════════════════════╗
@@ -106,9 +111,38 @@ class Orchestrator:
             CryptoStrategyAgent() if crypto_cfg.get("enabled", False) else None
         )
 
+        # ML learning pipeline
+        self.feature_store_agent = FeatureStoreAgent()
+        self.ml_strategy_agent = MLStrategyAgent()
+
+        # Adaptive Learner — aggiorna parametri di rischio ogni ciclo
+        self.adaptive_learner = AdaptiveLearner()
+
         # Portfolio Manager — syncs sub-portfolio views after execution
         self.portfolio_manager = PortfolioManager()
         self.backtesting_agent = BacktestingAgent()
+
+        # Auto-backtest state
+        ab_cfg = self.config.get("orchestrator", {}).get("auto_backtest", {})
+        self._auto_backtest_enabled = bool(ab_cfg.get("enabled", False))
+        self._auto_backtest_interval_days = int(ab_cfg.get("interval_days", 7))
+        self._auto_backtest_rolling_days = int(ab_cfg.get("rolling_window_days", 180))
+        self._auto_ml_on_completion = bool(ab_cfg.get("auto_ml_on_completion", True))
+        self._auto_backtest_thread: threading.Thread | None = None
+        self._auto_backtest_lock = threading.Lock()
+
+        # Background slow agents — StockAnalyzer (20s) + FeatureStore (37s) + SectorAnalyzer (36s)
+        # Run on their own cadence to keep main cycle under 60s target.
+        orch_cfg = self.config.get("orchestrator", {})
+        self._stock_bg_cadence = int(orch_cfg.get("stock_bg_cadence", 3))    # every 3 cycles (~3 min)
+        self._feature_bg_cadence = int(orch_cfg.get("feature_bg_cadence", 5))  # every 5 cycles (~5 min)
+        self._sector_bg_cadence = int(orch_cfg.get("sector_bg_cadence", 10))  # every 10 cycles (~10 min)
+        self._stock_bg_thread: threading.Thread | None = None
+        self._feature_bg_thread: threading.Thread | None = None
+        self._sector_bg_thread: threading.Thread | None = None
+        self._stock_bg_lock = threading.Lock()
+        self._feature_bg_lock = threading.Lock()
+        self._sector_bg_lock = threading.Lock()
 
         # Initialize shared state
         self._init_shared_state()
@@ -168,6 +202,9 @@ class Orchestrator:
                 "bear_strategy_agent":        {"status": "idle", "last_run": None, "last_error": None},
                 "crypto_strategy_agent":      {"status": "idle", "last_run": None, "last_error": None},
                 "portfolio_manager":          {"status": "idle", "last_run": None, "last_error": None},
+                "feature_store_agent":        {"status": "idle", "last_run": None, "last_error": None},
+                "ml_strategy_agent":          {"status": "idle", "last_run": None, "last_error": None},
+                "adaptive_learner":           {"status": "idle", "last_run": None, "last_error": None},
             },
             "data_freshness": {
                 "market_data":       None,
@@ -247,15 +284,49 @@ class Orchestrator:
         if not macro_ok:
             self.logger.warning("MacroAnalyzerAgent failed — pipeline continues but regime data may be stale")
 
-        # Step 2.5: Sector analysis
-        sector_ok = self._run_agent("sector_analyzer_agent", self.sector_agent)
-        if not sector_ok:
-            self.logger.warning("SectorAnalyzerAgent failed — pipeline continues but sector data may be stale")
+        # Step 2.5: Sector analysis — background thread, cadence every N cycles
+        if cycle_count % self._sector_bg_cadence == 1:
+            self._launch_background_agent(
+                "sector_analyzer_agent", self.sector_agent,
+                self._sector_bg_thread, self._sector_bg_lock,
+                "_sector_bg_thread",
+            )
+        else:
+            self.logger.info(
+                f"SectorAnalyzerAgent skipped (cycle {cycle_count}, "
+                f"next at cycle {(cycle_count // self._sector_bg_cadence + 1) * self._sector_bg_cadence + 1})"
+            )
 
-        # Step 2.6: Stock analysis
-        stock_ok = self._run_agent("stock_analyzer_agent", self.stock_agent)
-        if not stock_ok:
-            self.logger.warning("StockAnalyzerAgent failed — pipeline continues but stock data may be stale")
+        # Step 2.6: Stock analysis — background thread, cadence every N cycles
+        if cycle_count % self._stock_bg_cadence == 1:
+            self._launch_background_agent(
+                "stock_analyzer_agent", self.stock_agent,
+                self._stock_bg_thread, self._stock_bg_lock,
+                "_stock_bg_thread",
+            )
+        else:
+            self.logger.info(
+                f"StockAnalyzerAgent skipped (cycle {cycle_count}, "
+                f"next at cycle {(cycle_count // self._stock_bg_cadence + 1) * self._stock_bg_cadence + 1})"
+            )
+
+        # Step 2.7: Feature store — background thread, cadence every N cycles
+        if cycle_count % self._feature_bg_cadence == 1:
+            self._launch_background_agent(
+                "feature_store_agent", self.feature_store_agent,
+                self._feature_bg_thread, self._feature_bg_lock,
+                "_feature_bg_thread",
+            )
+        else:
+            self.logger.info(
+                f"FeatureStoreAgent skipped (cycle {cycle_count}, "
+                f"next at cycle {(cycle_count // self._feature_bg_cadence + 1) * self._feature_bg_cadence + 1})"
+            )
+
+        # Step 2.8: ML strategy — re-trains every refresh_days (default 30d), reads feature history
+        ml_ok = self._run_agent("ml_strategy_agent", self.ml_strategy_agent)
+        if not ml_ok:
+            self.logger.warning("MLStrategyAgent failed — RiskAgent will proceed without ML boost")
 
         # Step 3: News analysis
         news_ok = self._run_agent("news_data_agent", self.news_agent)
@@ -310,6 +381,9 @@ class Orchestrator:
         # Step 5c: Portfolio Manager — sync sub-portfolio views from parent portfolios
         self._run_agent("portfolio_manager", self.portfolio_manager)
 
+        # Step 5d: Adaptive Learner — aggiorna parametri di rischio in base alle performance
+        self._run_agent("adaptive_learner", self.adaptive_learner)
+
         # Step 6: Report (hourly, independent of pipeline failures)
         report_interval = self.config["orchestrator"]["report_interval_seconds"]
         if time.time() - self._last_report_time >= report_interval:
@@ -318,6 +392,126 @@ class Orchestrator:
             self._last_report_time = time.time()
 
         self._update_cycle_state(cycle_count)
+
+        # Step 7: Periodic auto-backtest (non-blocking background thread)
+        if self._auto_backtest_enabled:
+            self._maybe_trigger_auto_backtest()
+
+    def _launch_background_agent(
+        self,
+        name: str,
+        agent,
+        current_thread: "threading.Thread | None",
+        lock: threading.Lock,
+        thread_attr: str,
+    ) -> None:
+        """Launch agent in a daemon thread if no prior run is still active."""
+        with lock:
+            t = getattr(self, thread_attr)
+            if t is not None and t.is_alive():
+                self.logger.info(f"{name} background thread still running — skipping launch")
+                return
+
+            self.logger.info(f"Launching {name} in background thread")
+
+            def _run():
+                try:
+                    agent.run()
+                except Exception as exc:
+                    self.logger.error(f"Background {name} error: {exc}", exc_info=True)
+
+            new_thread = threading.Thread(target=_run, name=name, daemon=True)
+            setattr(self, thread_attr, new_thread)
+            new_thread.start()
+
+    def _maybe_trigger_auto_backtest(self) -> None:
+        """Start a background backtest if the interval has elapsed and no backtest is running."""
+        with self._auto_backtest_lock:
+            if self._auto_backtest_thread is not None and self._auto_backtest_thread.is_alive():
+                return  # Already running
+
+            last_run = self._read_auto_backtest_last_run()
+            if last_run is not None:
+                next_due = last_run + timedelta(days=self._auto_backtest_interval_days)
+                if datetime.now(timezone.utc) < next_due:
+                    return
+
+            self.logger.info(
+                "Auto-backtest due — launching background thread "
+                f"(interval={self._auto_backtest_interval_days}d, window={self._auto_backtest_rolling_days}d)"
+            )
+            self._auto_backtest_thread = threading.Thread(
+                target=self._run_auto_backtest_and_automl,
+                name="auto-backtest",
+                daemon=True,
+            )
+            self._auto_backtest_thread.start()
+
+    def _run_auto_backtest_and_automl(self) -> None:
+        """Background worker: update config dates, run backtest, then run AutoML."""
+        try:
+            # Build rolling window dates
+            end_dt = datetime.now(timezone.utc).date()
+            start_dt = end_dt - timedelta(days=self._auto_backtest_rolling_days)
+
+            # Temporarily override backtesting dates in the agent's config
+            self.backtesting_agent.config["backtesting"]["start_date"] = start_dt.isoformat()
+            self.backtesting_agent.config["backtesting"]["end_date"] = end_dt.isoformat()
+
+            self.logger.info(f"Auto-backtest starting | window={start_dt} → {end_dt}")
+            ok = self.backtesting_agent.run()
+
+            now_iso = datetime.now(timezone.utc).isoformat()
+            self._write_auto_backtest_last_run(now_iso, ok)
+
+            if not ok:
+                self.logger.error("Auto-backtest failed — skipping AutoML update")
+                return
+
+            self.logger.info("Auto-backtest completed — running AutoML weight update")
+            if self._auto_ml_on_completion:
+                self._run_automl()
+        except Exception as exc:
+            self.logger.error(f"Auto-backtest background thread error: {exc}", exc_info=True)
+
+    def _run_automl(self) -> None:
+        """Run AutoMLBacktestPipeline to update learned_strategy_weights.json."""
+        try:
+            pipeline = AutoMLBacktestPipeline(
+                repo_dir=BASE_DIR,
+                workspace_dir=BASE_DIR.parent,
+            )
+            result = pipeline.run()
+            if result.get("status") == "ok":
+                self.logger.info(
+                    "AutoML weight update done | reports=%d | weights=%s",
+                    result.get("reports_count", 0),
+                    result.get("strategy_weights", {}),
+                )
+            else:
+                self.logger.warning(f"AutoML skipped: {result.get('reason', 'unknown')}")
+        except Exception as exc:
+            self.logger.error(f"AutoML pipeline error: {exc}", exc_info=True)
+
+    def _read_auto_backtest_last_run(self) -> datetime | None:
+        state_path = DATA_DIR / "auto_backtest_state.json"
+        if not state_path.exists():
+            return None
+        try:
+            doc = json.loads(state_path.read_text(encoding="utf-8"))
+            last = doc.get("last_run_at")
+            if not last:
+                return None
+            return datetime.fromisoformat(last)
+        except Exception:
+            return None
+
+    def _write_auto_backtest_last_run(self, iso_ts: str, success: bool) -> None:
+        state_path = DATA_DIR / "auto_backtest_state.json"
+        doc = {"last_run_at": iso_ts, "last_run_success": success}
+        tmp = state_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+        os.replace(tmp, state_path)
 
     def _run_agent(self, name: str, agent) -> bool:
         try:
@@ -352,6 +546,16 @@ class Orchestrator:
 
     def _shutdown(self) -> None:
         self.logger.info("Shutting down cleanly...")
+        if self._auto_backtest_thread is not None and self._auto_backtest_thread.is_alive():
+            self.logger.info("Waiting for auto-backtest background thread to finish (max 300s)...")
+            self._auto_backtest_thread.join(timeout=300)
+            if self._auto_backtest_thread.is_alive():
+                self.logger.warning("Auto-backtest thread did not finish in time — proceeding with shutdown")
+        for attr, label in [("_stock_bg_thread", "StockAnalyzer"), ("_feature_bg_thread", "FeatureStore"), ("_sector_bg_thread", "SectorAnalyzer")]:
+            t = getattr(self, attr)
+            if t is not None and t.is_alive():
+                self.logger.info(f"Waiting for {label} background thread (max 60s)...")
+                t.join(timeout=60)
         try:
             with open(SHARED_STATE_PATH, "r", encoding="utf-8") as f:
                 state = json.load(f)

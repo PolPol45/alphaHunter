@@ -436,6 +436,35 @@ class AlphaHunterAgent(BaseAgent):
                         np.abs(l[1:] - c[:-1])))
         return float(np.mean(tr))
 
+    def _blend_with_ml(
+        self,
+        base_buy: float,
+        base_sell: float,
+        ml_weight: float,
+    ) -> tuple[float, float, float]:
+        """Blend base buy/sell scores with an ML weight contribution.
+
+        Args:
+            base_buy:  base buy composite score [0, 1]
+            base_sell: base sell composite score [0, 1]
+            ml_weight: ML predicted excess return weight (positive → bullish signal)
+
+        Returns:
+            (blended_buy, blended_sell, ml_contribution)
+        """
+        if not self._cfg.get("ml_blend_enabled", False):
+            return base_buy, base_sell, 0.0
+
+        blend_w = float(self._cfg.get("ml_blend_weight", 0.2))
+        contrib = ml_weight * blend_w
+        if contrib > 0.0:
+            blended_buy = min(1.0, base_buy + contrib)
+            blended_sell = base_sell
+        else:
+            blended_buy = base_buy
+            blended_sell = min(1.0, base_sell + abs(contrib))
+        return blended_buy, blended_sell, abs(contrib)
+
     # ------------------------------------------------------------------ #
     # Fallback signal                                                     #
     # ------------------------------------------------------------------ #

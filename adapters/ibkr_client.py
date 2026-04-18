@@ -249,6 +249,7 @@ class IBKRClient:
 
         from ib_insync import StopOrder
 
+        contract = self._qualify_contract(symbol)
         spec = self._symbol_map.get(symbol)
         sec_type = spec.get("sec_type", "STK").upper() if spec else "STK"
 
@@ -273,6 +274,58 @@ class IBKRClient:
             f"@ stop={stop_price} | orderId={order_id}"
         )
         return order_id
+
+    def place_oco_exit_orders(
+        self,
+        symbol: str,
+        action: str,
+        quantity: float,
+        take_profit_price: float,
+        stop_price: float,
+    ) -> dict:
+        """Place take-profit + stop-loss as an OCO pair for an already-filled position."""
+        if not self.ensure_connected():
+            raise ConnectionError("IBKR not connected")
+
+        from ib_insync import LimitOrder, StopOrder
+
+        contract = self._qualify_contract(symbol)
+        spec = self._symbol_map.get(symbol)
+        sec_type = spec.get("sec_type", "STK").upper() if spec else "STK"
+        oca_group = f"BOT_PAPER_OCA_{symbol}_{int(time.time() * 1000)}"
+
+        if sec_type == "CRYPTO":
+            tp_order = LimitOrder(action.upper(), totalQuantity=0, lmtPrice=take_profit_price)
+            tp_order.cashQty = round(quantity * take_profit_price, 2)
+            stop_order = StopOrder(action.upper(), totalQuantity=0, stopPrice=stop_price)
+            stop_order.cashQty = round(quantity * stop_price, 2)
+        else:
+            q = int(quantity)
+            if q <= 0:
+                raise ValueError("Quantity must be >= 1 for STK OCO orders")
+            tp_order = LimitOrder(action.upper(), totalQuantity=q, lmtPrice=take_profit_price)
+            stop_order = StopOrder(action.upper(), totalQuantity=q, stopPrice=stop_price)
+
+        for order, ref in ((tp_order, "BOT_PAPER_TP"), (stop_order, "BOT_PAPER_STOP")):
+            order.orderRef = ref
+            order.tif = "GTC"
+            order.ocaGroup = oca_group
+            order.ocaType = 1
+
+        tp_trade = self._ib.placeOrder(contract, tp_order)
+        stop_trade = self._ib.placeOrder(contract, stop_order)
+        self._ib.sleep(0.5)
+
+        logger.info(
+            f"OCO exits placed: {action} {quantity} {symbol} | "
+            f"tp={take_profit_price} stop={stop_price} "
+            f"| tpId={tp_trade.order.orderId} stopId={stop_trade.order.orderId}"
+        )
+        return {
+            "stop_order_id": stop_trade.order.orderId,
+            "take_profit_order_id": tp_trade.order.orderId,
+            "oca_group": oca_group,
+        }
 
     def cancel_order(self, order_id: int) -> bool:
         """Cancel an open order by orderId. Returns True if found and cancelled."""

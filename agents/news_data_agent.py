@@ -75,8 +75,6 @@ class NewsDataAgent(BaseAgent):
                 *fallback_items,
             ]
             deduped = self._dedupe_items(all_items)
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=self._lookback_hours)
-            deduped = [item for item in deduped if self._parse_iso(item["published_at"]) >= cutoff]
             for item in deduped:
                 self._apply_scores(item)
 

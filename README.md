@@ -254,3 +254,48 @@ python orchestrator.py
 - Paper-trading only (`trading.paper_trading` must remain `true`).
 - If IBKR paper connection is unavailable, execution falls back to simulation.
 - Agent communication is file-based and auditable through JSON outputs.
+
+
+LIVE BOT
+cd "/Users/paolomaizza/Desktop/crypto challenge/trading_bot"
+source "../venv/bin/activate"
+python orchestrator.py
+
+
+MONTE CARLO BACKTEST (nuovo terminale)
+cd "/Users/paolomaizza/Desktop/crypto challenge/trading_bot"
+source "../venv/bin/activate"
+python monte_carlo_backtest.py --scenarios 50 --days 90 --scenario-type base
+
+
+DASHBOARD LIVE — trade analytics (porta 8052)
+cd "/Users/paolomaizza/Desktop/crypto challenge/trading_bot"
+source "../venv/bin/activate"
+python trade_analytics.py
+
+
+DASHBOARD PERFORMANCE LIVE — equity curve + ML + adaptive params (porta 8053)
+cd "/Users/paolomaizza/Desktop/crypto challenge/trading_bot"
+source "../venv/bin/activate"
+python performance_dashboard.py
+
+
+DASHBOARD BACKTEST STORICO — metriche, pipeline, variance (porta 8054)
+cd "/Users/paolomaizza/Desktop/crypto challenge/trading_bot"
+source "../venv/bin/activate"
+python backtest_performance.py
+
+
+DASHBOARD MONTE CARLO — distribuzione scenari (porta 8051)
+cd "/Users/paolomaizza/Desktop/crypto challenge/trading_bot"
+source "../venv/bin/activate"
+python backtest_dashboard.py
+
+
+Porte summary:
+
+Porta	Dashboard
+8051	Monte Carlo scenari
+8052	Trade live (posizioni, P&L, sizing)
+8053	Performance live (equity curve, ML)
+8054	Backtest storico (metriche, pipeline

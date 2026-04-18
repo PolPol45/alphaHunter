@@ -1,5 +1,7 @@
 import json
 import logging
+import time
+import hashlib
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -7,10 +9,14 @@ from datetime import datetime, timezone
 
 from agents.base_agent import BaseAgent, DATA_DIR
 
+_CACHE_FILE = DATA_DIR / "sector_price_cache.json"
+
 class SectorAnalyzerAgent(BaseAgent):
     def __init__(self):
         super().__init__("sector_analyzer_agent")
         self.sector_map = self.config.get("sector_map", {})
+        sa_cfg = self.config.get("sector_analyzer", {})
+        self._cache_ttl = float(sa_cfg.get("cache_ttl_seconds", 3600))
         
     def run(self) -> bool:
         self.mark_running()
@@ -22,14 +28,18 @@ class SectorAnalyzerAgent(BaseAgent):
                 
             self.logger.info(f"Analyzing {len(self.sector_map)} sectors defined in config...")
             
-            # Retrieve Macro layer context 
-            # We don't crash if missing, but we link it.
-            macro_state = self.read_json(DATA_DIR / "market_regime.json")
+            # Retrieve Macro layer context
+            macro_state = self.read_json(DATA_DIR / "market_regime.json") or {}
             regime = macro_state.get("regime", "UNKNOWN")
-            
+
+            # Invalidate cache when macro confidence is LOW (stale/uncertain data)
+            force_refresh = macro_state.get("confidence", "LOW") == "LOW"
+            if force_refresh:
+                self.logger.info("Macro confidence=LOW — forcing cache refresh for sector data")
+
             sectors_processed = []
-            
-            spy_data = self._fetch_history("SPY", lookback_days=100)
+
+            spy_data = self._fetch_history_cached("SPY", lookback_days=100, force=force_refresh)
             
             for sector_name, config in self.sector_map.items():
                 benchmark = config.get("benchmark")
@@ -38,15 +48,15 @@ class SectorAnalyzerAgent(BaseAgent):
                 self.logger.info(f"Processing sector {sector_name} ({benchmark}) with {len(members)} members")
                 
                 # Fetch Benchmark Data
-                benchmark_data = self._fetch_history(benchmark, lookback_days=100)
-                
+                benchmark_data = self._fetch_history_cached(benchmark, lookback_days=100, force=force_refresh)
+
                 # Metrics
                 ret_5d, ret_20d, ret_60d = self._calculate_returns(benchmark_data)
                 beta = self._calculate_beta(benchmark_data, spy_data)
                 rs_20d = self._calculate_relative_strength(benchmark_data, spy_data, days=20)
-                
+
                 # Breadth calculation
-                breadth = self._calculate_breadth(members)
+                breadth = self._calculate_breadth_cached(members, force=force_refresh)
                 
                 # Scoring synthetic
                 raw_score = 0.0
@@ -65,17 +75,22 @@ class SectorAnalyzerAgent(BaseAgent):
                 else:
                     driver_type = "MIXED"
 
+                signal = "STRONG" if score > 0.7 else ("WEAK" if score < 0.4 else "NEUTRAL")
+
                 sectors_processed.append({
                     "name": sector_name,
                     "benchmark": benchmark,
                     "members": members,
                     "score": score,
+                    "signal": signal,
                     "rank": 0,  # Will calculate after processing all
+                    "rs_rank": 0,  # Will calculate after sorting by RS
                     "return_5d": ret_5d,
                     "return_20d": ret_20d,
                     "return_60d": ret_60d,
                     "relative_strength_20d": rs_20d,
-                    "breadth_above_ema50": breadth,
+                    "breadth_50d": breadth,
+                    "breadth_above_ema50": breadth,  # legacy alias
                     "avg_volume_trend": None,
                     "news_count": 0,
                     "news_sentiment_score": 0.0,
@@ -84,7 +99,7 @@ class SectorAnalyzerAgent(BaseAgent):
                     "alerts": []
                 })
                 
-            # Rank the sectors by score descending
+            # Rank by score descending
             sectors_processed.sort(key=lambda s: s["score"], reverse=True)
             for i, s in enumerate(sectors_processed):
                 s["rank"] = i + 1
@@ -92,6 +107,15 @@ class SectorAnalyzerAgent(BaseAgent):
                     s["alerts"].append("SECTOR_LEADER")
                 elif i == len(sectors_processed) - 1:
                     s["alerts"].append("SECTOR_LAGGARD")
+
+            # RS rank: separate ranking by relative_strength_20d
+            rs_sorted = sorted(
+                sectors_processed,
+                key=lambda s: (s["relative_strength_20d"] or -999),
+                reverse=True
+            )
+            for i, s in enumerate(rs_sorted):
+                s["rs_rank"] = i + 1
 
             scorecard = {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -110,6 +134,64 @@ class SectorAnalyzerAgent(BaseAgent):
             self.logger.error(f"SectorAnalyzerAgent failed: {e}", exc_info=True)
             self.mark_error(e)
             return False
+
+    # ── Cache helpers ──────────────────────────────────────────────────────────
+
+    def _load_cache(self) -> dict:
+        try:
+            if _CACHE_FILE.exists():
+                return json.loads(_CACHE_FILE.read_text())
+        except Exception:
+            pass
+        return {}
+
+    def _save_cache(self, cache: dict) -> None:
+        try:
+            _CACHE_FILE.write_text(json.dumps(cache))
+        except Exception as e:
+            self.logger.debug(f"Cache write failed: {e}")
+
+    def _fetch_history_cached(self, symbol: str, lookback_days: int, force: bool = False) -> pd.DataFrame | None:
+        cache = self._load_cache()
+        key = f"{symbol}_{lookback_days}d"
+        entry = cache.get(key, {})
+        age = time.time() - entry.get("ts", 0)
+        if not force and age < self._cache_ttl and entry.get("records"):
+            try:
+                df = pd.DataFrame(entry["records"])
+                df["Date"] = pd.to_datetime(df["Date"])
+                df = df.set_index("Date")
+                self.logger.debug(f"Cache hit: {key} (age={age:.0f}s)")
+                return df
+            except Exception:
+                pass  # corrupt entry → fall through to fresh fetch
+        df = self._fetch_history(symbol, lookback_days)
+        if df is not None:
+            reset = df.reset_index()
+            # index column may be named "Date", "Datetime", or something else
+            idx_col = reset.columns[0]
+            reset[idx_col] = reset[idx_col].astype(str)
+            reset = reset.rename(columns={idx_col: "Date"})
+            cache[key] = {"ts": time.time(), "records": reset.to_dict("records")}
+            self._save_cache(cache)
+        return df
+
+    def _calculate_breadth_cached(self, members: list[str], force: bool = False) -> float | None:
+        if not members:
+            return None
+        key = "breadth_" + hashlib.md5(",".join(sorted(members)).encode()).hexdigest()[:8]
+        cache = self._load_cache()
+        entry = cache.get(key, {})
+        age = time.time() - entry.get("ts", 0)
+        if not force and age < self._cache_ttl and "value" in entry:
+            self.logger.debug(f"Cache hit: {key} (age={age:.0f}s)")
+            return entry["value"]
+        value = self._calculate_breadth(members)
+        cache[key] = {"ts": time.time(), "value": value}
+        self._save_cache(cache)
+        return value
+
+    # ── yfinance fetchers (no caching — called only on cache miss) ─────────────
 
     def _fetch_history(self, symbol: str, lookback_days: int) -> pd.DataFrame | None:
         try:

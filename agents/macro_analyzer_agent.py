@@ -19,13 +19,29 @@ class MacroAnalyzerAgent(BaseAgent):
         self.mark_running()
         try:
             self.logger.info("Fetching macro data from FRED...")
-            fed_funds = self._fetch_fred("FEDFUNDS")
-            cpi = self._fetch_fred("CPIAUCSL")
-            qe_qt_proxy = self._fetch_fred("WALCL")
+            fed_funds_hist = self._fetch_fred_history("FEDFUNDS")
+            fed_funds = fed_funds_hist[-1] if fed_funds_hist else None
+            fed_funds_trend = (fed_funds_hist[-1] - fed_funds_hist[0]) if len(fed_funds_hist) > 1 else 0
+
+            cpi_hist = self._fetch_fred_history("CPIAUCSL")
+            cpi = cpi_hist[-1] if cpi_hist else None
+
+            yield_spread_hist = self._fetch_fred_history("T10Y2Y", limit=5)
+            yield_spread = yield_spread_hist[-1] if yield_spread_hist else None
+            
+            qe_qt_hist = self._fetch_fred_history("WALCL")
+            qe_qt_proxy = qe_qt_hist[-1] if qe_qt_hist else None
+            qe_qt_trend = (qe_qt_hist[-1] - qe_qt_hist[0]) if len(qe_qt_hist) > 1 else 0
             
             self.logger.info("Fetching macro data from yfinance...")
-            dxy = self._fetch_yf_close("DX-Y.NYB")
-            sp500 = self._fetch_yf_close("^GSPC")
+            dxy_hist = self._fetch_yf_history("DX-Y.NYB", 60)
+            dxy = dxy_hist[-1] if dxy_hist else None
+            dxy_ma50 = sum(dxy_hist[-50:])/min(len(dxy_hist), 50) if len(dxy_hist) >= 50 else None
+
+            sp500_hist = self._fetch_yf_history("^GSPC", 60)
+            sp500 = sp500_hist[-1] if sp500_hist else None
+            sp500_ma50 = sum(sp500_hist[-50:])/min(len(sp500_hist), 50) if len(sp500_hist) >= 50 else None
+
             stoxx600 = self._fetch_yf_close("EXSA.DE")
             nikkei = self._fetch_yf_close("^N225")
             vix = self._fetch_yf_close("^VIX")
@@ -46,7 +62,19 @@ class MacroAnalyzerAgent(BaseAgent):
             
             correlations = self._calculate_regional_correlations()
             
-            regime, score = self._determine_market_regime(vix, sp500, dxy)
+            regime, score = self._determine_market_regime(
+                vix=vix,
+                sp500=sp500,
+                dxy=dxy,
+                fed_funds=fed_funds,
+                qe_qt_proxy=qe_qt_proxy,
+                put_call_ratio=put_call_ratio,
+                dxy_ma50=dxy_ma50,
+                qe_qt_trend=qe_qt_trend,
+                fed_funds_trend=fed_funds_trend,
+                sp500_ma50=sp500_ma50,
+                yield_spread=yield_spread
+            )
             
             volatility_sentiment = {
                 "vix_regime": "HIGH" if (vix and vix > 20) else "NORMAL",
@@ -56,14 +84,22 @@ class MacroAnalyzerAgent(BaseAgent):
             
             risk_flags = self._generate_risk_flags(vix, dxy)
             
+            # Confidence: HIGH if >=3 data sources available, LOW if <=1
+            available_sources = sum(1 for x in [vix, dxy, fed_funds, yield_spread, sp500] if x is not None)
+            confidence = "HIGH" if available_sources >= 3 else ("MEDIUM" if available_sources == 2 else "LOW")
+
+            now_iso = datetime.now(timezone.utc).isoformat()
             macro_state = {
-                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "timestamp": now_iso,
+                "generated_at": now_iso,
                 "regime": regime,
                 "score": score,
+                "confidence": confidence,
                 "macro_factors": {
                     "fed_proxy": fed_funds,
                     "inflation_proxy": cpi,
                     "dxy": dxy,
+                    "yield_spread_10y2y": yield_spread,
                     "sp500": sp500,
                     "stoxx600": stoxx600,
                     "nikkei": nikkei,
@@ -100,6 +136,15 @@ class MacroAnalyzerAgent(BaseAgent):
         except Exception as e:
             self.logger.warning(f"Failed to fetch FRED series {series_id}: {e}")
         return None
+
+    def _fetch_fred_history(self, series_id: str, limit: int = 12) -> list[float]:
+        try:
+            series = self.fred_client.get_series(series_id, limit=limit)
+            if series and len(series) > 0:
+                return [round(float(s["value"]), 4) for s in series]
+        except Exception as e:
+            self.logger.warning(f"Failed to fetch FRED series history {series_id}: {e}")
+        return []
         
     def _fetch_yf_close(self, ticker: str) -> float | None:
         try:
@@ -110,6 +155,16 @@ class MacroAnalyzerAgent(BaseAgent):
         except Exception as e:
             self.logger.warning(f"Failed to fetch yfinance series {ticker}: {e}")
         return None
+
+    def _fetch_yf_history(self, ticker: str, days: int = 60) -> list[float]:
+        try:
+            t = yf.Ticker(ticker)
+            df = t.history(period=f"{days}d")
+            if not df.empty:
+                return [round(float(x), 4) for x in df["Close"].tolist()]
+        except Exception as e:
+            self.logger.warning(f"Failed to fetch yfinance history {ticker}: {e}")
+        return []
 
     def _calculate_spy_put_call_ratio(self) -> float | None:
         try:
@@ -146,21 +201,86 @@ class MacroAnalyzerAgent(BaseAgent):
             "spx_vs_em_20d": None
         }
         
-    def _determine_market_regime(self, vix: float | None, sp500: float | None, dxy: float | None) -> tuple[str, float]:
+    def _determine_market_regime(
+        self,
+        vix: float | None,
+        sp500: float | None,
+        dxy: float | None,
+        fed_funds: float | None,
+        qe_qt_proxy: float | None,
+        put_call_ratio: float | None,
+        dxy_ma50: float | None = None,
+        qe_qt_trend: float | None = None,
+        fed_funds_trend: float | None = None,
+        sp500_ma50: float | None = None,
+        yield_spread: float | None = None,
+    ) -> tuple[str, float]:
         score = 0.0
         
+        # --- 40% VIX & Trend del Mercato ---
+        market_score = 0.0
         if vix is not None:
-            if vix < 15: score += 0.3
-            elif vix > 25: score -= 0.5
+            if vix < 15: market_score += 0.2
+            elif vix > 25: market_score -= 0.3
             
-        if dxy is not None:
-            if dxy < 100: score += 0.2
-            elif dxy > 105: score -= 0.3
+        if sp500 is not None and sp500_ma50 is not None:
+            if sp500 > sp500_ma50:
+                market_score += 0.2
+            else:
+                market_score -= 0.1
+                
+        if put_call_ratio is not None:
+            if put_call_ratio < 0.7:  # greesh / bullish
+                market_score += 0.1
+            elif put_call_ratio > 1.0: # bearish
+                market_score -= 0.1
+                
+        # --- 30% Dollaro (DXY relative index) ---
+        dxy_score = 0.0
+        if dxy is not None and dxy_ma50 is not None:
+            if dxy > dxy_ma50:
+                dxy_score -= 0.3  # Forte dollaro = bearish risk assets
+            else:
+                dxy_score += 0.3
+        elif dxy is not None: # fallback
+            if dxy < 100: dxy_score += 0.15
+            elif dxy > 105: dxy_score -= 0.3
+
+        # --- Yield spread (10Y-2Y): positive = normal curve = bullish ---
+        if yield_spread is not None:
+            if yield_spread > 0.5:
+                score += 0.1
+            elif yield_spread < 0:
+                score -= 0.1  # inverted curve = warning
+
+        # --- 30% Variabili FED (Liquidità QE/QT, e Tassi d'interesse) ---
+        fed_score = 0.0
+        if fed_funds_trend is not None:
+            if fed_funds_trend > 0:
+                fed_score -= 0.15  # tassi salgono
+            elif fed_funds_trend < 0:
+                fed_score += 0.15
+        
+        if qe_qt_trend is not None:
+            if qe_qt_trend > 0:
+                fed_score += 0.15  # liquidità aumenta
+            elif qe_qt_trend < 0:
+                fed_score -= 0.15  # liquidità diminuisce
+                
+        score = market_score + dxy_score + fed_score
+        
+        # Override se estremo RISK_OFF (tassi salgono + DXY forte + liquidità scende)
+        if (fed_funds_trend and fed_funds_trend > 0) and (dxy and dxy_ma50 and dxy > dxy_ma50) and (qe_qt_trend and qe_qt_trend < 0):
+            self.logger.warning("EXTREME RISK OFF TRIGGERED! Rates Up + DXY Up + Liquidity Down")
+            score = -1.0
+            return "RISK_OFF", score
             
+        score = max(-1.0, min(1.0, score))
+        
         if score > 0.3:
-            return "RISK_ON", round(min(score, 1.0), 2)
+            return "RISK_ON", round(score, 2)
         elif score < -0.3:
-            return "RISK_OFF", round(max(score, -1.0), 2)
+            return "RISK_OFF", round(score, 2)
         else:
             return "NEUTRAL", round(score, 2)
 
@@ -170,6 +290,42 @@ class MacroAnalyzerAgent(BaseAgent):
         if news_data and "summary_metrics" in news_data:
             return round(float(news_data["summary_metrics"].get("average_sentiment", 0.0)), 2)
         return 0.0
+
+    def _from_snapshot(self, snapshot: dict) -> dict:
+        """Build a market regime dict from a macro_snapshot.json-style document."""
+        score = float(snapshot.get("market_bias", 0.0) or 0.0)
+        regime = "RISK_ON" if score > 0.1 else ("RISK_OFF" if score < -0.1 else "NEUTRAL")
+
+        series = snapshot.get("series", {})
+        fed_value = None
+        for key, entry in series.items():
+            if isinstance(entry, dict) and entry.get("status") == "ok":
+                if key in {"fed_funds", "fedfunds"}:
+                    fed_value = entry.get("value")
+                    break
+        if fed_value is None:
+            # fallback: first available series value
+            for entry in series.values():
+                if isinstance(entry, dict) and entry.get("status") == "ok":
+                    fed_value = entry.get("value")
+                    break
+
+        advanced = snapshot.get("advanced_macro", {})
+        liquidity = snapshot.get("liquidity", {})
+        risk_flags = snapshot.get("risk_flags", [])
+
+        return {
+            "regime": regime,
+            "score": score,
+            "macro_factors": {
+                "fed_proxy": fed_value,
+                "advanced_macro": advanced,
+                "liquidity": liquidity,
+                "risk_flags": risk_flags,
+            },
+            "source": "macro_snapshot",
+            "generated_at": snapshot.get("generated_at"),
+        }
 
     def _generate_risk_flags(self, vix: float | None, dxy: float | None) -> list[dict]:
         flags = []

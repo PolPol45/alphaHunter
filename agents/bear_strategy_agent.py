@@ -132,6 +132,18 @@ class BearStrategyAgent(BaseAgent):
             self.mark_error(exc)
             return False
 
+    @staticmethod
+    def _ml_short_symbols(ml_doc: dict) -> set:
+        """Return the set of symbols from ml_doc['latest_ranking']['bottom_decile_short']."""
+        entries = ml_doc.get("latest_ranking", {}).get("bottom_decile_short", [])
+        return {entry["symbol"] for entry in entries if "symbol" in entry}
+
+    @staticmethod
+    def _alpha_short_symbols(alpha_doc: dict) -> set:
+        """Return symbols from alpha_doc['signals'] where signal_type == 'SELL'."""
+        signals = alpha_doc.get("signals", {})
+        return {sym for sym, sig in signals.items() if sig.get("signal_type") == "SELL"}
+
     def _analyze_macro(self) -> tuple[float, bool]:
         macro = self.read_json(DATA_DIR / "macro_snapshot.json")
         series = macro.get("series", {})

@@ -29,6 +29,11 @@ class ReportAgentMetadataTests(unittest.TestCase):
                 "equity_basis": "proportional_split_of_shared_ibkr_account",
                 "configured_capital_share": 0.25,
                 "allocation_note": "Synthetic split",
+                "trades": [
+                    {"reason": "TP_HIT"},
+                    {"reason": "SL_HIT"},
+                    {"reason": "TP_HIT"},
+                ],
             }
         )
 
@@ -39,6 +44,7 @@ class ReportAgentMetadataTests(unittest.TestCase):
         )
         self.assertEqual(summary["configured_capital_share"], 0.25)
         self.assertEqual(summary["allocation_note"], "Synthetic split")
+        self.assertEqual(summary["exit_breakdown"], {"TP_HIT": 2, "SL_HIT": 1})
 
     def test_data_sources_exposes_portfolio_accounting_section(self) -> None:
         sources = self.agent._data_sources(

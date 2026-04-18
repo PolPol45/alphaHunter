@@ -36,11 +36,29 @@ from agents.base_agent import BaseAgent, DATA_DIR
 
 
 class TechnicalAnalysisAgent(BaseAgent):
+    PATTERN_MULTIPLIERS = {
+        "NR4":            1.15,
+        "NR7":            1.10,
+        "TRIANGLE":       1.10,
+        "ID":             1.03,
+        "BIG_TAIL_BULL":  1.08,
+        "BIG_TAIL_BEAR":  1.08,
+        "STRONG_CLOSE":   1.08,
+        "WEAK_CLOSE":     1.08,
+        "TREND_DAY_BULL": 0.85,
+        "TREND_DAY_BEAR": 0.85,
+    }
+
+    _DOW_MULTIPLIERS = {0: 0.88, 1: 0.95, 2: 1.05, 3: 1.07, 4: 1.05}
+
     def __init__(self) -> None:
         super().__init__("technical_analysis_agent")
         self._timeout = self.config["orchestrator"]["agent_timeout_seconds"]
         self._core_assets = set(self.config.get("assets", []))
         self._scanner_cfg = self.config.get("scanner", {})
+        # Institutional analyzes equity/ETF universe, not just core crypto assets
+        inst_universe = self._scanner_cfg.get("institutional_universe", [])
+        self._institutional_assets = set(inst_universe) if inst_universe else self._core_assets
 
     # ------------------------------------------------------------------ #
     # Public interface                                                     #
@@ -56,6 +74,18 @@ class TechnicalAnalysisAgent(BaseAgent):
                 raise ValueError("market_data.json is empty or missing")
             self._validate_freshness(market.get("timestamp"))
 
+            # Extract current date for DOW multiplier
+            from datetime import date as _date
+            _ts_str = market.get("timestamp", "")
+            try:
+                current_date = _date.fromisoformat(_ts_str[:10])
+            except Exception:
+                current_date = _date.today()
+            dow_mult = self._dow_multiplier(current_date)
+            self.logger.info(
+                f"DOW adjustment: {current_date.strftime('%A')} × {dow_mult:.2f}"
+            )
+
             # World Monitor sentiment — modifies final scores
             world_events   = market.get("world_events", [])
             sentiment_score, sentiment_label = self._compute_sentiment(world_events)
@@ -64,6 +94,20 @@ class TechnicalAnalysisAgent(BaseAgent):
                     f"World sentiment: {sentiment_score:+.2f} ({sentiment_label}) "
                     f"from {len(world_events)} events"
                 )
+
+            # Regime gate: suppress BUY signals if RISK_OFF
+            macro_regime = self.read_json(DATA_DIR / "market_regime.json")
+            regime = macro_regime.get("regime", "NEUTRAL") if macro_regime else "NEUTRAL"
+            regime_blocks_buy = (regime == "RISK_OFF")
+            if regime_blocks_buy:
+                self.logger.warning("Regime=RISK_OFF — BUY signals suppressed this cycle")
+
+            # Stock score filter: prefer BUY only for composite_score > 0.60
+            stock_scores_data = self.read_json(DATA_DIR / "stock_scores.json")
+            stock_min_scores: dict[str, float] = {}
+            if stock_scores_data:
+                for sym, info in stock_scores_data.get("stocks", {}).items():
+                    stock_min_scores[sym] = float(info.get("composite_score", 0.0))
 
             retail_signals:        dict = {}
             institutional_signals: dict = {}
@@ -88,23 +132,55 @@ class TechnicalAnalysisAgent(BaseAgent):
                     sym_sentiment, _ = self._compute_sentiment(symbol_events)
                     news_context = self._news_context_for_symbol(symbol, news_feed, macro_snapshot)
 
-                    retail_signals[symbol] = self._generate_signal(
+                    # None = not in stock_scores (crypto) → skip filter entirely
+                    # float < 0.60 = equity below threshold → downgrade BUY → HOLD
+                    # None = not in stock_scores (crypto) → skip filter entirely
+                    # float < 0.60 = equity below threshold → downgrade BUY → HOLD
+                    stock_composite = stock_min_scores.get(symbol, None)
+                    # Compute noise bands from raw daily candles (before DataFrame conversion)
+                    noise_bands = self._compute_noise_bands(data.get("ohlcv_1d", []))
+
+                    # Detect daily patterns from 1d candles
+                    candles_1d = data.get("ohlcv_1d", [])
+                    patterns = self._detect_daily_patterns(candles_1d)
+
+                    retail_sig = self._generate_signal(
                         df_4h, df_1d, last_price, self.config["retail"], "retail",
                         sentiment=sym_sentiment,
                         context=news_context,
+                        regime_blocks_buy=regime_blocks_buy,
+                        stock_composite_score=stock_composite,
                     )
-                    if symbol in self._core_assets:
-                        institutional_signals[symbol] = self._generate_signal(
+                    retail_sig["noise_bands"] = noise_bands
+                    # Apply pattern boost and DOW multiplier to retail score
+                    r_score = self._apply_pattern_boost(retail_sig["score"], retail_sig["signal_type"], patterns)
+                    r_score = min(1.0, r_score * dow_mult)
+                    retail_sig["score"] = round(r_score, 3)
+                    retail_sig["daily_patterns"] = list(patterns.keys())
+                    retail_sig["pattern_boost"] = round(r_score, 3)
+                    retail_signals[symbol] = retail_sig
+                    if symbol in self._institutional_assets:
+                        inst_sig = self._generate_signal(
                             df_4h, df_1d, last_price, self.config["institutional"], "institutional",
                             sentiment=sym_sentiment,
                             context=news_context,
+                            regime_blocks_buy=regime_blocks_buy,
+                            stock_composite_score=stock_composite,
                         )
+                        inst_sig["noise_bands"] = noise_bands
+                        # Apply pattern boost and DOW multiplier to institutional score
+                        i_score = self._apply_pattern_boost(inst_sig["score"], inst_sig["signal_type"], patterns)
+                        i_score = min(1.0, i_score * dow_mult)
+                        inst_sig["score"] = round(i_score, 3)
+                        inst_sig["daily_patterns"] = list(patterns.keys())
+                        inst_sig["pattern_boost"] = round(i_score, 3)
+                        institutional_signals[symbol] = inst_sig
 
                 except Exception as e:
                     self.logger.warning(f"Could not analyze {symbol}: {e}")
                     fallback = self._hold_signal(data.get("last_price", 0))
                     retail_signals[symbol] = fallback
-                    if symbol in self._core_assets:
+                    if symbol in self._institutional_assets:
                         institutional_signals[symbol] = fallback
 
             retail_top = self._rank_candidates(
@@ -162,7 +238,8 @@ class TechnicalAnalysisAgent(BaseAgent):
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         age = (datetime.now(timezone.utc) - ts).total_seconds()
-        if age > self._timeout:
+        backtest_mode = self.config.get("orchestrator", {}).get("mode") == "backtest"
+        if not backtest_mode and age > self._timeout:
             raise ValueError(f"Market data is {age:.0f}s old (timeout={self._timeout}s)")
 
     @staticmethod
@@ -272,6 +349,8 @@ class TechnicalAnalysisAgent(BaseAgent):
         mode: str,
         sentiment: float = 0.0,
         context: dict | None = None,
+        regime_blocks_buy: bool = False,
+        stock_composite_score: float | None = None,
     ) -> dict:
         curr = df_4h.iloc[-1]
         prev = df_4h.iloc[-2]
@@ -387,12 +466,17 @@ class TechnicalAnalysisAgent(BaseAgent):
 
         threshold = cfg["signal_threshold"]
 
+        # EMA 9/21 cross booleans (for issue #172 schema)
+        ema9_cross_up = bool(curr["ema_fast"] > curr["ema_slow"] and prev["ema_fast"] <= prev["ema_slow"])
+        ema9_cross_dn = bool(curr["ema_fast"] < curr["ema_slow"] and prev["ema_fast"] >= prev["ema_slow"])
+
         # Stop-loss and take-profit
         atr_val  = float(curr["atr"]) if not np.isnan(curr["atr"]) else last_price * 0.02
         sl_buy   = max(last_price - 1.5 * atr_val, last_price * (1 - cfg["stop_loss_pct"]))
         tp_buy   = min(last_price + 3.0 * atr_val, last_price * (1 + cfg["take_profit_pct"]))
         sl_sell  = min(last_price + 1.5 * atr_val, last_price * (1 + cfg["stop_loss_pct"]))
         tp_sell  = max(last_price - 3.0 * atr_val, last_price * (1 - cfg["take_profit_pct"]))
+        suggested_sl_pct = round(1.5 * atr_val / last_price, 4) if last_price > 0 else cfg["stop_loss_pct"]
 
         if buy_score > threshold and buy_score > sell_score:
             signal_type = "BUY"
@@ -410,6 +494,20 @@ class TechnicalAnalysisAgent(BaseAgent):
             stop_loss   = round(last_price * (1 - cfg["stop_loss_pct"]), 4)
             take_profit = round(last_price * (1 + cfg["take_profit_pct"]), 4)
 
+        # Regime gate: downgrade BUY → HOLD if RISK_OFF
+        if signal_type == "BUY" and regime_blocks_buy:
+            signal_type = "HOLD"
+            score = round(buy_score, 4)
+
+        # Stock composite filter: only applied for equities (score is not None)
+        # Crypto symbols have score=None → filter skipped intentionally
+        stock_filter_applied = (
+            stock_composite_score is not None and stock_composite_score < 0.60
+        )
+        if signal_type == "BUY" and stock_filter_applied:
+            signal_type = "HOLD"
+            score = round(buy_score, 4)
+
         return {
             "signal_type": signal_type,
             "score":       score,
@@ -418,10 +516,15 @@ class TechnicalAnalysisAgent(BaseAgent):
             "last_price":  round(last_price, 4),
             "stop_loss":   stop_loss,
             "take_profit": take_profit,
+            "suggested_stop_loss_pct": suggested_sl_pct,
+            "ema9_cross":  ema9_cross_up,
+            "ema9_cross_dn": ema9_cross_dn,
             "atr":         round(atr_val, 4),
             "rsi":         round(rsi, 2),
             "adx":         round(adx, 2),
             "ema_trend":   round(daily_ema50, 4),
+            "regime_filter_applied": regime_blocks_buy,
+            "stock_score_filter_applied": stock_filter_applied,
             "mode":        mode,
             "context_adjustment": adjustment_breakdown,
         }
@@ -436,11 +539,17 @@ class TechnicalAnalysisAgent(BaseAgent):
             "last_price": float(last_price),
             "stop_loss": 0.0,
             "take_profit": 0.0,
+            "suggested_stop_loss_pct": 0.0,
+            "ema9_cross": False,
+            "ema9_cross_dn": False,
             "atr": 0.0,
             "rsi": 50.0,
             "adx": 0.0,
             "ema_trend": 0.0,
+            "regime_filter_applied": False,
+            "stock_score_filter_applied": False,
             "mode": "error",
+            "noise_bands": None,
             "context_adjustment": {
                 "world_sentiment": 0.0,
                 "news_sentiment": 0.0,
@@ -491,6 +600,114 @@ class TechnicalAnalysisAgent(BaseAgent):
             "macro_bias": float(macro_snapshot.get("market_bias", 0.0)),
             "drivers": drivers,
         }
+
+    @staticmethod
+    def _compute_noise_bands(candles_1d: list[dict]) -> dict | None:
+        """
+        Returns upper/lower noise band for today using 14-day avg move from open.
+        Uses daily candles (no intraday needed — adapted for daily backtest).
+        Requires ≥15 daily candles.
+        """
+        if len(candles_1d) < 15:
+            return None
+
+        recent = candles_1d[-15:-1]  # 14 days before today
+        today = candles_1d[-1]
+
+        # avg absolute move from open over last 14 days
+        moves = [abs(c["c"] / c["o"] - 1) for c in recent if c.get("o", 0) > 0]
+        if not moves:
+            return None
+        sigma = sum(moves) / len(moves)
+
+        # anchor: max/min of today open and yesterday close
+        prev_close = candles_1d[-2]["c"]
+        upper_anchor = max(today["o"], prev_close)
+        lower_anchor = min(today["o"], prev_close)
+
+        return {
+            "upper": round(upper_anchor * (1 + sigma), 6),
+            "lower": round(lower_anchor * (1 - sigma), 6),
+            "sigma": round(sigma, 6),
+        }
+
+    @staticmethod
+    def _detect_daily_patterns(candles_1d: list[dict]) -> dict:
+        """Detect daily price structure patterns (NR4, NR7, ID, Triangle, etc.)."""
+        if len(candles_1d) < 8:
+            return {}
+        today = candles_1d[-1]
+        prev = candles_1d[-2]
+        t_range = today["h"] - today["l"]
+        ranges = [c["h"] - c["l"] for c in candles_1d]
+        patterns = {}
+        # NR4: smallest range of last 4 days
+        if t_range > 0 and all(t_range <= r for r in ranges[-5:-1]):
+            patterns["NR4"] = True
+        # NR7: smallest range of last 7 days
+        if len(candles_1d) >= 8 and t_range > 0 and all(t_range <= r for r in ranges[-8:-1]):
+            patterns["NR7"] = True
+        # Inside Day
+        if today["h"] < prev["h"] and today["l"] > prev["l"]:
+            patterns["ID"] = True
+        # Triangle
+        if len(candles_1d) >= 3:
+            prev2_h = max(candles_1d[-3]["h"], candles_1d[-2]["h"])
+            prev2_l = min(candles_1d[-3]["l"], candles_1d[-2]["l"])
+            if today["h"] < prev2_h and today["l"] > prev2_l:
+                patterns["TRIANGLE"] = True
+        # Big Tail
+        if t_range > 0:
+            body_low = min(today["o"], today["c"])
+            body_high = max(today["o"], today["c"])
+            if (body_low - today["l"]) / t_range >= 0.75:
+                patterns["BIG_TAIL_BULL"] = True
+            if (body_high - today["l"]) / t_range <= 0.25:
+                patterns["BIG_TAIL_BEAR"] = True
+        # Strong/Weak Closure
+        if t_range > 0:
+            close_pct = (today["c"] - today["l"]) / t_range
+            if close_pct >= 0.90:
+                patterns["STRONG_CLOSE"] = True
+            elif close_pct <= 0.10:
+                patterns["WEAK_CLOSE"] = True
+        # Trend Day
+        if t_range > 0:
+            open_pct = (today["o"] - today["l"]) / t_range
+            close_pct2 = (today["c"] - today["l"]) / t_range
+            if open_pct <= 0.15 and close_pct2 >= 0.85:
+                patterns["TREND_DAY_BULL"] = True
+            elif open_pct >= 0.85 and close_pct2 <= 0.15:
+                patterns["TREND_DAY_BEAR"] = True
+        return patterns
+
+    def _apply_pattern_boost(self, score: float, signal: str, patterns: dict) -> float:
+        """Apply pattern-based score multipliers, capped at 1.0."""
+        mult = 1.0
+        for p, active in patterns.items():
+            if not active:
+                continue
+            if p == "BIG_TAIL_BULL" and signal != "BUY":
+                continue
+            if p == "BIG_TAIL_BEAR" and signal != "SELL":
+                continue
+            if p == "STRONG_CLOSE" and signal != "BUY":
+                continue
+            if p == "WEAK_CLOSE" and signal != "SELL":
+                continue
+            mult *= self.PATTERN_MULTIPLIERS.get(p, 1.0)
+        return min(1.0, score * mult)
+
+    @staticmethod
+    def _dow_multiplier(current_date) -> float:
+        """Return day-of-week score multiplier (Mon=0.88 … Thu=1.07)."""
+        from datetime import date
+        if isinstance(current_date, str):
+            try:
+                current_date = date.fromisoformat(current_date[:10])
+            except Exception:
+                return 1.0
+        return {0: 0.88, 1: 0.95, 2: 1.05, 3: 1.07, 4: 1.05}.get(current_date.weekday(), 1.0)
 
     @staticmethod
     def _rank_candidates(signals: dict, limit: int) -> list[dict]:

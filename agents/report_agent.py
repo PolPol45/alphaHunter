@@ -116,6 +116,12 @@ class ReportAgent(BaseAgent):
     # ------------------------------------------------------------------ #
 
     def _portfolio_summary(self, portfolio: dict) -> dict:
+        exit_breakdown: dict[str, int] = {}
+        for trade in portfolio.get("trades", []):
+            reason = trade.get("reason")
+            if reason in {"TP_HIT", "SL_HIT"}:
+                exit_breakdown[reason] = exit_breakdown.get(reason, 0) + 1
+
         return {
             "total_equity":    portfolio.get("total_equity",    0.0),
             "cash":            portfolio.get("cash",            0.0),
@@ -129,6 +135,7 @@ class ReportAgent(BaseAgent):
             "equity_basis":    portfolio.get("equity_basis",    "unknown"),
             "configured_capital_share": portfolio.get("configured_capital_share"),
             "allocation_note": portfolio.get("allocation_note"),
+            "exit_breakdown":  exit_breakdown,
         }
 
     def _open_positions(self, portfolio: dict) -> dict:

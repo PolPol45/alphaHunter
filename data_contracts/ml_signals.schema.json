@@ -1,0 +1,14 @@
+{
+  "$id": "ml_signals.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["generated_at", "runtime_mode", "history"],
+  "properties": {
+    "generated_at": { "type": "string", "format": "date-time" },
+    "runtime_mode": { "type": "string" },
+    "latest_date": { "type": ["string", "null"] },
+    "latest_ranking": { "type": "object" },
+    "history": { "type": "object" }
+  },
+  "additionalProperties": true
+}

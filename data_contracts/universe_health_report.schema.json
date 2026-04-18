@@ -1,0 +1,40 @@
+{
+  "$id": "universe_health_report.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["generated_at", "summary", "symbols"],
+  "properties": {
+    "generated_at": { "type": "string", "format": "date-time" },
+    "config": { "type": "object" },
+    "summary": {
+      "type": "object",
+      "required": ["total_symbols", "valid_symbols", "excluded_symbols", "reason_counts"],
+      "properties": {
+        "total_symbols": { "type": "integer", "minimum": 0 },
+        "valid_symbols": { "type": "integer", "minimum": 0 },
+        "excluded_symbols": { "type": "integer", "minimum": 0 },
+        "reason_counts": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "symbols": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["symbol", "status", "reason_codes", "bars"],
+        "properties": {
+          "symbol": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "enum": ["valid", "excluded"] },
+          "reason_codes": { "type": "array", "items": { "type": "string" } },
+          "bars": { "type": "integer", "minimum": 0 },
+          "latest_date": { "type": ["string", "null"] },
+          "stale_days": { "type": ["integer", "null"] },
+          "median_dollar_volume": { "type": "number" },
+          "avg_volume": { "type": "number" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

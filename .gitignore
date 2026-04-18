@@ -15,11 +15,12 @@ venv/
 # Runtime artifacts
 logs/
 backtest_data/
+Bash tool output*
 
 # Generated data and reports
-data/*.json
-data/**/*.json
-reports/*.json
+data/
+reports/
+config.backup.*.json
 
 # Local state
 shared_state.json

@@ -1,0 +1,13 @@
+{
+  "$id": "ml_dataset_weekly.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["date_t", "symbol", "target_excess_return_t_plus_1"],
+  "properties": {
+    "date_t": { "type": "string", "format": "date-time" },
+    "symbol": { "type": "string", "minLength": 1 },
+    "benchmark": { "type": ["string", "null"] },
+    "target_excess_return_t_plus_1": { "type": "number" }
+  },
+  "additionalProperties": true
+}

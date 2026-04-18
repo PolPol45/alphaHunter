@@ -89,16 +89,9 @@ class StockAnalyzerAgent(BaseAgent):
                 
                 technical_data = self._calculate_technicals(df)
                 fundamental_data = self._fetch_fundamentals(symbol)
-                
+
                 tech_score = self._compute_technical_score(technical_data)
                 fund_score = self._compute_fundamental_score(fundamental_data)
-                composite = round((tech_score * 0.6) + (fund_score * 0.4), 2)
-                
-                alerts = []
-                if composite > 0.7: alerts.append("STRONG_BUY_SIGNAL")
-                if fundamental_data.get("roe") and fundamental_data["roe"] > 0.2: alerts.append("HIGH_PROFITABILITY")
-                if technical_data.get("rsi") and technical_data["rsi"] < 30: alerts.append("OVERSOLD_BOUNCE")
-                if technical_data.get("rsi") and technical_data["rsi"] > 70: alerts.append("OVERBOUGHT")
 
                 # Resolve sector/benchmark
                 if symbol in self.known_symbols:
@@ -107,14 +100,21 @@ class StockAnalyzerAgent(BaseAgent):
                 else:
                     sect = fundamental_data.get("sector", "Unknown_Sector")
                     bench = "SPY"
+                    if sect == "Unknown_Sector":
+                        self.logger.debug(f"{symbol}: sector not resolved via yfinance — using default tailwind")
+
+                # composite_score and action set in post-processing (after tailwind applied)
 
                 existing_scores[symbol] = {
                     "symbol": symbol,
                     "sector": sect,
                     "benchmark": bench,
-                    "composite_score": composite,
+                    "composite_score": 0.0,  # filled in post-processing after tailwind
                     "technical_score": tech_score,
                     "fundamental_score": fund_score,
+                    "sector_tailwind": None,  # filled in post-processing below
+                    "action": "WATCH",        # filled in post-processing after tailwind
+                    "rank": 0,                # filled after sorting
                     "news_score": 0.0,
                     "beta": fundamental_data.get("beta"),
                     "price_target_mean": fundamental_data.get("target_mean"),
@@ -131,16 +131,67 @@ class StockAnalyzerAgent(BaseAgent):
                     "momentum_7d": technical_data.get("momentum_7d"),
                     "momentum_30d": technical_data.get("momentum_30d"),
                     "correlation_to_sector": None,
-                    "alerts": alerts
+                    "alerts": []  # filled in post-processing after composite_score is final
                 }
                 
-            # 5. Flat and sort all known scores
+            # 5. Load sector tailwinds from sector_scorecard.json
+            sector_tailwind_map = {}
+            try:
+                scorecard = self.read_json(DATA_DIR / "sector_scorecard.json")
+                for s in scorecard.get("sectors", []):
+                    sector_tailwind_map[s["name"]] = s.get("score", 0.85)
+            except Exception:
+                pass
+
+            # 6. Flat, apply tailwind, sort, assign rank
             scores_list = list(existing_scores.values())
+            for item in scores_list:
+                raw_tailwind = sector_tailwind_map.get(item.get("sector"), 0.85)
+                item["sector_tailwind"] = round(raw_tailwind, 3)
+                # Recompute composite with tailwind weight: 0.8 + 0.2 * sector_score
+                tailwind_weight = 0.8 + 0.2 * raw_tailwind
+                item["composite_score"] = round(
+                    (item["technical_score"] * 0.6 + item["fundamental_score"] * 0.4) * tailwind_weight, 2
+                )
+                item["action"] = "BUY_CANDIDATE" if item["composite_score"] > 0.70 else (
+                    "AVOID" if item["composite_score"] < 0.40 else "WATCH"
+                )
+                alerts = []
+                if item["composite_score"] > 0.7:
+                    alerts.append("STRONG_BUY_SIGNAL")
+                roe = item.get("roe")
+                if roe is not None and roe > 0.2:
+                    alerts.append("HIGH_PROFITABILITY")
+                rsi = item.get("rsi")
+                if rsi is not None and rsi < 30:
+                    alerts.append("OVERSOLD_BOUNCE")
+                if rsi is not None and rsi > 70:
+                    alerts.append("OVERBOUGHT")
+                item["alerts"] = alerts
+
             scores_list.sort(key=lambda x: x["composite_score"], reverse=True)
-            
+            for i, item in enumerate(scores_list):
+                item["rank"] = i + 1
+
+            # Build stocks dict (issue schema) alongside legacy list
+            stocks_dict = {
+                item["symbol"]: {
+                    "technical_score": item["technical_score"],
+                    "fundamental_score": item["fundamental_score"],
+                    "sector_tailwind": item["sector_tailwind"],
+                    "composite_score": item["composite_score"],
+                    "rank": item["rank"],
+                    "action": item["action"],
+                }
+                for item in scores_list
+            }
+
+            now_iso = datetime.now(timezone.utc).isoformat()
             output = {
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "scores": scores_list
+                "timestamp": now_iso,
+                "generated_at": now_iso,
+                "stocks": stocks_dict,
+                "scores": scores_list,  # legacy full list for backward compat
             }
             
             self.write_json(score_file, output)

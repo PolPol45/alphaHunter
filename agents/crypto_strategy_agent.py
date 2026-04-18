@@ -445,6 +445,20 @@ class CryptoStrategyAgent(BaseAgent):
             return 100.0
         return float(100.0 - 100.0 / (1.0 + ag / al))
 
+    def _passes_cost_guard(self, metrics: dict) -> bool:
+        """Return True when asset liquidity and spread metrics meet minimum thresholds.
+
+        Thresholds (configurable via config.json → crypto_strategy → cost_guard):
+          min_dollar_volume_30d : 1_000_000  (default)
+          max_spread_proxy      : 0.05       (default)
+        """
+        cg = self.config.get("crypto_strategy", {}).get("cost_guard", {})
+        min_volume = float(cg.get("min_dollar_volume_30d", 1_000_000.0))
+        max_spread = float(cg.get("max_spread_proxy", 0.05))
+        vol = float(metrics.get("median_dollar_volume_30d", 0.0))
+        spread = float(metrics.get("spread_proxy", 1.0))
+        return vol >= min_volume and spread <= max_spread
+
     def _macd_signal(self, closes: np.ndarray) -> tuple[bool, bool]:
         if len(closes) < 35:
             return False, False

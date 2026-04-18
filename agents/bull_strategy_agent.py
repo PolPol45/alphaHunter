@@ -63,7 +63,7 @@ class BullStrategyAgent(BaseAgent):
                 healthy = item.get("ema50_above_ema200", True)
                 if not healthy:
                     # Se non è in golden cross, pretendiamo un gran punteggio o RSI over-sold
-                    rsi = item.get("rsi", 50)
+                    rsi = item.get("rsi") or 50
                     if comp < (threshold + 0.1) and rsi >= 40:
                         continue
                 
@@ -107,6 +107,42 @@ class BullStrategyAgent(BaseAgent):
         except Exception as exc:
             self.mark_error(exc)
             return False
+
+    @staticmethod
+    def _ml_sets(ml_doc: dict) -> tuple[set, set]:
+        """Return (longs_set, shorts_set) of symbols from ml_doc['latest_ranking']."""
+        ranking = ml_doc.get("latest_ranking", {})
+        longs = {e["symbol"] for e in ranking.get("top_decile_long", []) if "symbol" in e}
+        shorts = {e["symbol"] for e in ranking.get("bottom_decile_short", []) if "symbol" in e}
+        return longs, shorts
+
+    def _dynamic_threshold(self, macro_bias: float, macro_multiplier: float) -> float:
+        """Return a signal threshold float adjusted by macro conditions.
+
+        Base threshold comes from config (default 0.60). It is raised when macro is
+        negative (risk-off) and lowered when macro is positive, bounded to [0.45, 0.90].
+        Also reads macro_snapshot.json for extra adjustments (liquidity, risk_flags).
+        """
+        base = float(self._cfg.get("signal_threshold", 0.60))
+        # Macro bias adjustment: negative bias → raise threshold (be more selective)
+        threshold = base - (macro_bias * 0.10)
+        # Macro multiplier adjustment: multiplier >1 means accommodative → lower threshold
+        threshold = threshold / max(0.5, macro_multiplier)
+
+        # Additional adjustments from macro snapshot
+        try:
+            macro_doc = self.read_json(DATA_DIR / "macro_snapshot.json") or {}
+            advanced = macro_doc.get("advanced_macro", {})
+            liq_score = float(advanced.get("liquidity_proxy_score", 0.0) or 0.0)
+            # Negative liquidity → raise threshold
+            threshold -= liq_score * 0.05
+            # Each risk flag → raise threshold slightly
+            n_flags = len(macro_doc.get("risk_flags", []))
+            threshold += n_flags * 0.02
+        except Exception:
+            pass
+
+        return max(0.45, min(0.90, threshold))
 
     def _analyze_macro(self) -> tuple[float, float]:
         """Livello 1: Ritorna bias (-1.0 to 1.0) e un PE threshold multiplier."""

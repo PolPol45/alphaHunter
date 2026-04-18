@@ -4,10 +4,16 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from agents.base_agent import BaseAgent, DATA_DIR, REPORTS_DIR
+import shutil
+
+from agents.base_agent import BaseAgent, BASE_DIR, DATA_DIR, REPORTS_DIR
 from agents.execution_agent import ExecutionAgent
 from agents.risk_agent import RiskAgent
-from adapters.historical_data_store import HistoricalDataStore
+from agents.technical_analysis_agent import TechnicalAnalysisAgent
+from adapters.historical_data_store import HistoricalDataStore, fetch_real_snapshots
+
+# Separate directory for backtest working files — never touches live DATA_DIR files
+BT_RUN_DIR = BASE_DIR / "data" / "bt_run"
 from backtesting.backtest_metrics import (
     calmar_ratio,
     max_drawdown,
@@ -33,6 +39,8 @@ class BacktestingAgent(BaseAgent):
         self._store = HistoricalDataStore()
         self._risk = RiskAgent()
         self._execution = ExecutionAgent()
+        self._ta = TechnicalAnalysisAgent()
+        self._ta._timeout = float("inf")  # backtest data is always "stale" by design
 
     def run(self) -> bool:
         self.mark_running()
@@ -50,68 +58,120 @@ class BacktestingAgent(BaseAgent):
             universe = self._freeze_universe()
             self.logger.info(f"Backtest start: {start} -> {end} | universe={len(universe)}")
 
+            # Pre-download real historical data from yfinance (skips already-cached days)
+            use_real_data = self._cfg.get("use_real_data", True)
+            if use_real_data:
+                self.logger.info("Pre-downloading real historical data from yfinance…")
+                # Include macro symbols for regime/macro snapshot
+                macro_syms = ["SPY", "^VIX", "TLT", "GLD", "DX-Y.NYB"]
+                fetch_real_snapshots(
+                    list(dict.fromkeys([*universe, *macro_syms])),
+                    start, end,
+                    self._store.bt_dir,
+                )
+                self.logger.info("Historical data ready.")
+
             # Reset runtime state for clean replay.
             self._reset_runtime_state()
 
+            # Snapshot live files we will temporarily overwrite, restore them after.
+            # Snapshot live files we overwrite (except market_data.json — too large).
+            # market_data.json is written to a separate bt path and swapped temporarily.
+            _LIVE_FILES = [
+                "macro_snapshot.json", "market_regime.json",
+                "sector_scorecard.json", "stock_scores.json", "bull_signals.json",
+                "bear_signals.json", "crypto_signals.json", "news_feed.json",
+                "signals.json", "alpha_signals.json",
+            ]
+            live_snapshots: dict[str, bytes | None] = {}
+            for fname in _LIVE_FILES:
+                p = DATA_DIR / fname
+                live_snapshots[fname] = p.read_bytes() if p.exists() else None
+
+            # For market_data.json: save original, use bt-specific file during loop
+            _md_live = DATA_DIR / "market_data.json"
+            _md_live_backup = DATA_DIR / "market_data_live_backup.json"
+            if _md_live.exists() and _md_live.stat().st_size < 5 * 1024 * 1024:
+                shutil.copy2(str(_md_live), str(_md_live_backup))
+
             equity_curve: list[float] = []
+            equity_dates: list[str] = []
             returns: list[float] = []
             prev_equity: float | None = None
 
             day = start
             steps = 0
-            while day <= end:
-                steps += 1
-                self._set_backtest_context(day, universe)
+            try:
+                while day <= end:
+                    steps += 1
+                    self._set_backtest_context(day, universe)
 
-                market = self._store.get_snapshot_at(day, universe)
-                market = self._filter_no_lookahead(market, day)
-                self.write_json(DATA_DIR / "market_data.json", market)
+                    market = self._store.get_snapshot_at(day, universe)
+                    market = self._filter_no_lookahead(market, day)
+                    self.write_json(DATA_DIR / "market_data.json", market)
 
-                macro = self._build_macro_snapshot(day, market)
-                self.write_json(DATA_DIR / "macro_snapshot.json", macro)
-                self.write_json(DATA_DIR / "market_regime.json", self._build_market_regime(day, macro))
+                    macro = self._build_macro_snapshot_real(day, market)
+                    self.write_json(DATA_DIR / "macro_snapshot.json", macro)
+                    self.write_json(DATA_DIR / "market_regime.json", self._build_market_regime(day, macro))
 
-                sector = self._build_sector_scorecard(day)
-                self.write_json(DATA_DIR / "sector_scorecard.json", sector)
+                    sector = self._build_sector_scorecard(day)
+                    self.write_json(DATA_DIR / "sector_scorecard.json", sector)
 
-                stock_scores = self._build_stock_scores(day, universe)
-                self.write_json(DATA_DIR / "stock_scores.json", stock_scores)
+                    # Placeholder stock_scores — TA agent will compute real signals below
+                    self.write_json(DATA_DIR / "stock_scores.json", {"generated_at": self._iso(day), "scores": [], "stocks": {}})
 
-                bull = self._build_bull_signals(stock_scores, macro)
-                bear = self._build_bear_signals(stock_scores, macro)
-                crypto = self._build_crypto_signals(day, market)
-                self.write_json(DATA_DIR / "bull_signals.json", bull)
-                self.write_json(DATA_DIR / "bear_signals.json", bear)
-                self.write_json(DATA_DIR / "crypto_signals.json", crypto)
+                    # Placeholder news/alpha — no real news data in backtest
+                    self.write_json(DATA_DIR / "news_feed.json", {"generated_at": self._iso(day), "items": [], "top_alerts": []})
+                    self.write_json(DATA_DIR / "alpha_signals.json", {"timestamp": self._iso(day), "signals": {}, "scanner": {"top_candidates": []}})
 
-                # Feed placeholders used by downstream agents expecting these files.
-                self.write_json(DATA_DIR / "news_feed.json", {"generated_at": self._iso(day), "items": [], "top_alerts": []})
-                self.write_json(DATA_DIR / "signals.json", {
-                    "timestamp": self._iso(day),
-                    "retail": {},
-                    "institutional": {},
-                    "scanner": {"retail_top_candidates": [], "institutional_top_candidates": []},
-                    "context": {"macro_bias": macro.get("market_bias", 0.0)},
-                })
-                self.write_json(DATA_DIR / "alpha_signals.json", {"timestamp": self._iso(day), "signals": {}, "scanner": {"top_candidates": []}})
+                    # Run real TechnicalAnalysisAgent on actual historical candles
+                    self._ta.run()
 
-                if not self._risk.run():
-                    raise RuntimeError(f"RiskAgent failed at {day}")
-                if not self._execution.run():
-                    raise RuntimeError(f"ExecutionAgent failed at {day}")
+                    # Build strategy signals from TA output
+                    signals = self.read_json(DATA_DIR / "signals.json") or {}
+                    stock_scores = self._build_stock_scores_from_signals(signals, universe)
+                    self.write_json(DATA_DIR / "stock_scores.json", stock_scores)
 
-                eq = self._current_total_equity()
-                equity_curve.append(eq)
-                if prev_equity and prev_equity > 0:
-                    returns.append((eq - prev_equity) / prev_equity)
-                prev_equity = eq
+                    bull = self._build_bull_signals(stock_scores, macro)
+                    bear = self._build_bear_signals(stock_scores, macro)
+                    crypto = self._build_crypto_signals(day, market)
+                    self.write_json(DATA_DIR / "bull_signals.json", bull)
+                    self.write_json(DATA_DIR / "bear_signals.json", bear)
+                    self.write_json(DATA_DIR / "crypto_signals.json", crypto)
 
-                if steps % 20 == 0:
-                    self.logger.info(f"Backtest progress: {day} | equity={eq:.2f}")
+                    if not self._risk.run():
+                        raise RuntimeError(f"RiskAgent failed at {day}")
+                    if not self._execution.run():
+                        raise RuntimeError(f"ExecutionAgent failed at {day}")
 
-                day += timedelta(days=1)
+                    eq = self._current_total_equity()
+                    equity_curve.append(eq)
+                    equity_dates.append(day.isoformat())
+                    if prev_equity and prev_equity > 0:
+                        returns.append((eq - prev_equity) / prev_equity)
+                    prev_equity = eq
 
-            report = self._build_report(start, end, universe, equity_curve, returns)
+                    if steps % 20 == 0:
+                        self.logger.info(f"Backtest progress: {day} | equity={eq:.2f}")
+
+                    day += timedelta(days=1)
+            finally:
+                # Restore market_data.json from backup if we saved one
+                if _md_live_backup.exists():
+                    shutil.copy2(str(_md_live_backup), str(_md_live))
+                    _md_live_backup.unlink(missing_ok=True)
+                else:
+                    # No backup — delete the backtest-generated market_data so live agent recreates it
+                    _md_live.unlink(missing_ok=True)
+                # Restore all other live data files
+                for fname, content in live_snapshots.items():
+                    p = DATA_DIR / fname
+                    if content is not None:
+                        p.write_bytes(content)
+                    elif p.exists():
+                        p.unlink(missing_ok=True)
+
+            report = self._build_report(start, end, universe, equity_curve, equity_dates, returns)
             report_path = REPORTS_DIR / f"backtest_report_{start.isoformat()}_{end.isoformat()}.json"
             self.write_json(report_path, report)
             self.logger.info(f"Backtest completed | steps={steps} | report={report_path.name}")
@@ -148,17 +208,226 @@ class BacktestingAgent(BaseAgent):
             if not c1 and not c4:
                 continue
             last_price = float((c1[-1] if c1 else c4[-1]).get("c", data.get("last_price", 0.0)))
+            c4_or_c1 = c4 or c1
+            # Compute VWAP from last 6 × 4h bars (24h window) — needed for VWAP trail exit
+            recent = c4_or_c1[-6:]
+            cum_vol = sum(float(c.get("v", 0)) for c in recent)
+            if cum_vol > 0:
+                vwap = round(sum(((float(c["h"]) + float(c["l"]) + float(c["c"])) / 3.0) * float(c.get("v", 0)) for c in recent) / cum_vol, 6)
+            else:
+                vwap = last_price  # fallback: use last price so trail still works
             out_assets[sym] = {
                 "last_price": last_price,
                 "ohlcv_1d": c1,
-                "ohlcv_4h": c4 or c1,
+                "ohlcv_4h": c4_or_c1,
                 "orderbook": data.get("orderbook", {"bids": [], "asks": []}),
                 "volume_24h": float(data.get("volume_24h", 0.0)),
+                "vwap": vwap,
             }
         market["assets"] = out_assets
         market["timestamp"] = self._iso(day)
         market["data_source"] = "backtest_historical"
         return market
+
+    def _build_macro_snapshot_real(self, day: date, market: dict) -> dict:
+        """Build macro snapshot from real historical prices (SPY momentum + VIX proxy)."""
+        # SPY momentum proxy for regime
+        spy = market.get("assets", {}).get("SPY", {})
+        spy_closes = [float(c["c"]) for c in spy.get("ohlcv_1d", [])[-31:]]
+        mom30 = 0.0
+        if len(spy_closes) >= 30 and spy_closes[0] > 0:
+            mom30 = (spy_closes[-1] - spy_closes[0]) / spy_closes[0]
+
+        # VIX proxy: use ^VIX if available, else estimate from SPY daily returns std
+        vix_asset = market.get("assets", {}).get("^VIX", {})
+        vix_closes = [float(c["c"]) for c in vix_asset.get("ohlcv_1d", [])[-5:]]
+        if vix_closes:
+            vix_val = round(vix_closes[-1], 2)
+        elif len(spy_closes) >= 20:
+            import numpy as np
+            rets = np.diff(spy_closes[-21:]) / spy_closes[-21:-1]
+            vix_val = round(float(np.std(rets)) * 100 * (252 ** 0.5), 2)
+        else:
+            vix_val = 20.0
+
+        # TLT for rates context
+        tlt = market.get("assets", {}).get("TLT", {})
+        tlt_closes = [float(c["c"]) for c in tlt.get("ohlcv_1d", [])[-6:]]
+        tlt_mom = 0.0
+        if len(tlt_closes) >= 5 and tlt_closes[0] > 0:
+            tlt_mom = (tlt_closes[-1] - tlt_closes[0]) / tlt_closes[0]
+
+        bias = max(-1.0, min(1.0, mom30 * 3.0 - (vix_val - 20) * 0.01))
+        risk_flags = []
+        if vix_val > 30:
+            risk_flags.append({"code": "HIGH_VIX", "severity": "warning", "vix": vix_val})
+        if bias < -0.2:
+            risk_flags.append({"code": "RISK_OFF", "severity": "warning", "bias": round(bias, 3)})
+
+        return {
+            "generated_at": self._iso(day),
+            "series": {
+                "fed_funds": {"value": 4.5, "status": "ok"},
+                "cpi_yoy":   {"value": 3.0, "status": "ok"},
+                "dxy":       {"value": 101.0, "status": "ok"},
+                "vix":       {"value": vix_val, "status": "ok"},
+                "tlt_mom5d": {"value": round(tlt_mom, 4), "status": "ok"},
+                "spy_mom30d":{"value": round(mom30, 4), "status": "ok"},
+            },
+            "risk_flags": risk_flags,
+            "market_bias": round(bias, 4),
+            "source_status": {"backtest": True, "real_prices": True},
+        }
+
+    # ── Stock classifier ────────────────────────────────────────────── #
+    # Classifies each equity by size/quality tier using price, volume and
+    # realised volatility derived from historical candles. No external data
+    # needed — everything comes from market_data.json / HistoricalDataStore.
+    #
+    # Tiers and their behavioural rules:
+    #   BLUE_CHIP   price≥50  vol20d_avg≥5M   realised_vol≤0.025  → lowest score bar, widest SL
+    #   LARGE_CAP   price≥10  vol20d_avg≥1M   realised_vol≤0.040  → standard
+    #   SMALL_CAP   price≥5   vol20d_avg≥200K realised_vol≤0.060  → higher score bar, tighter size
+    #   SPECULATIVE price<5 OR vol<200K OR vol>0.06                → blocked entirely in bull
+    @staticmethod
+    def _classify_stock(sym: str, candles_1d: list[dict]) -> dict:
+        """Return tier + derived metrics for a single equity."""
+        if len(candles_1d) < 10:
+            return {"tier": "UNKNOWN", "avg_vol_20d": 0, "realised_vol": 0.10, "last_price": 0}
+
+        recent = candles_1d[-20:]
+        closes = [float(c["c"]) for c in recent if c.get("c")]
+        volumes = [float(c["v"]) for c in recent if c.get("v")]
+        last_price = closes[-1] if closes else 0.0
+        avg_vol = sum(volumes) / len(volumes) if volumes else 0.0
+
+        # Daily log-return volatility (annualised not needed — compare vs thresholds below)
+        import math as _math
+        rets = [_math.log(closes[i] / closes[i-1]) for i in range(1, len(closes)) if closes[i-1] > 0]
+        if len(rets) >= 5:
+            mean_r = sum(rets) / len(rets)
+            var_r = sum((r - mean_r) ** 2 for r in rets) / max(1, len(rets) - 1)
+            realised_vol = _math.sqrt(max(var_r, 0.0))
+        else:
+            realised_vol = 0.10
+
+        # ATR relative to price (avg true range / price)
+        atr_vals = []
+        for i in range(1, len(recent)):
+            h = float(recent[i].get("h", 0))
+            l = float(recent[i].get("l", 0))
+            prev_c = float(recent[i-1].get("c", 0))
+            if h > 0 and l > 0 and prev_c > 0:
+                atr_vals.append(max(h - l, abs(h - prev_c), abs(l - prev_c)))
+        atr_pct = (sum(atr_vals) / len(atr_vals) / last_price) if atr_vals and last_price > 0 else 0.10
+
+        if last_price >= 50 and avg_vol >= 5_000_000 and realised_vol <= 0.020:
+            tier = "BLUE_CHIP"
+        elif last_price >= 10 and avg_vol >= 1_000_000 and realised_vol <= 0.028:
+            tier = "LARGE_CAP"
+        elif last_price >= 5 and avg_vol >= 200_000 and realised_vol <= 0.035:
+            tier = "SMALL_CAP"
+        else:
+            tier = "SPECULATIVE"
+
+        # Volume spike: compare last day vs 20d avg (momentum breakout signal)
+        last_vol = float(candles_1d[-1].get("v", 0)) if candles_1d else 0.0
+        vol_spike_ratio = (last_vol / avg_vol) if avg_vol > 0 else 0.0
+
+        # 20-day high (for new high breakout check)
+        high_20d = max((float(c.get("h", 0)) for c in recent if c.get("h")), default=0.0)
+
+        return {
+            "tier": tier,
+            "avg_vol_20d": round(avg_vol),
+            "realised_vol": round(realised_vol, 5),
+            "atr_pct": round(atr_pct, 5),
+            "last_price": round(last_price, 4),
+            "vol_spike_ratio": round(vol_spike_ratio, 3),
+            "high_20d": round(high_20d, 4),
+        }
+
+    # Score floor and size multiplier by tier — used in _build_stock_scores_from_signals
+    _TIER_RULES: dict = {
+        # tier                  : (min_composite_score, size_mult, sl_mult, tp_mult)
+        "BLUE_CHIP"             : (0.68, 1.20, 1.8, 2.5),   # easier entry, larger size
+        "LARGE_CAP"             : (0.73, 1.00, 1.5, 2.2),   # standard
+        "SMALL_CAP"             : (0.78, 0.60, 1.2, 1.8),   # harder entry, smaller size
+        "SPECULATIVE_MOMENTUM"  : (0.82, 0.20, 0.8, 3.0),   # breakout only, tiny size, aggressive R/R
+        "SPECULATIVE"           : (99.0, 0.00, 0.0, 0.0),   # blocked
+        "UNKNOWN"               : (0.80, 0.50, 1.0, 1.5),
+    }
+
+    def _build_stock_scores_from_signals(self, signals: dict, universe: list[str]) -> dict:
+        """Derive stock_scores from real TA signals, enriched with stock-tier classification."""
+        retail = signals.get("retail", {})
+        market_doc = self.read_json(DATA_DIR / "market_data.json") or {}
+        rows = []
+        for sym in universe:
+            r_sig = retail.get(sym, {})
+            sig_label = r_sig.get("signal", "HOLD")
+            buy_score  = float(r_sig.get("buy_score",  0.5))
+            sell_score = float(r_sig.get("sell_score", 0.5))
+            composite = round(buy_score * 0.6 + (1 - sell_score) * 0.4, 3)
+
+            # Classify stock tier from live market_data candles
+            candles_1d = (market_doc.get("assets", {}).get(sym, {}).get("ohlcv_1d") or [])
+            stock_info = self._classify_stock(sym, candles_1d)
+            tier = stock_info["tier"]
+            tier_rules = self._TIER_RULES.get(tier, self._TIER_RULES["UNKNOWN"])
+            min_score, size_mult, sl_mult, tp_mult = tier_rules
+
+            # Speculative: allow only on confirmed momentum breakout
+            if tier == "SPECULATIVE":
+                rsi = float(r_sig.get("rsi") or 0)
+                vol_spike = stock_info.get("vol_spike_ratio", 0.0)
+                last_px = stock_info["last_price"]
+                high_20d = stock_info.get("high_20d", 0.0)
+                is_momentum_breakout = (
+                    vol_spike >= 3.0          # volume 3× la media 20gg
+                    and rsi >= 65             # momentum confermato
+                    and last_px >= high_20d * 0.995  # prezzo vicino/sopra 20d high
+                    and composite >= 0.82     # score alto
+                )
+                if not is_momentum_breakout:
+                    continue
+                tier = "SPECULATIVE_MOMENTUM"
+                tier_rules = self._TIER_RULES["SPECULATIVE_MOMENTUM"]
+                min_score, size_mult, sl_mult, tp_mult = tier_rules
+
+            # Enforce per-tier score floor
+            if composite < min_score:
+                continue
+
+            rows.append({
+                "symbol": sym,
+                "sector": "Unknown_Sector",
+                "benchmark": "SPY",
+                "composite_score": composite,
+                "technical_score": round(buy_score, 3),
+                "fundamental_score": 0.5,
+                "sector_tailwind": 0.85,
+                "action": "BUY_CANDIDATE" if sig_label == "BUY" else ("AVOID" if sig_label == "SELL" else "WATCH"),
+                "news_score": 0.0,
+                "beta": None,
+                "ema50_above_ema200": r_sig.get("ema50_above_200", False),
+                "rsi": r_sig.get("rsi"),
+                "macd_state": "BULLISH" if buy_score > 0.55 else ("BEARISH" if sell_score > 0.55 else "NEUTRAL"),
+                "momentum_7d": None,
+                "momentum_30d": None,
+                "alerts": ["STRONG_BUY_SIGNAL"] if composite > 0.7 else [],
+                # Stock-tier metadata passed downstream to RiskAgent via _noise_bands field
+                "_stock_tier": tier,
+                "_tier_size_mult": size_mult,
+                "_tier_sl_mult": sl_mult,
+                "_tier_tp_mult": tp_mult,
+                "_avg_vol_20d": stock_info["avg_vol_20d"],
+                "_realised_vol": stock_info["realised_vol"],
+                "_atr_pct": stock_info["atr_pct"],
+            })
+        rows.sort(key=lambda x: x["composite_score"], reverse=True)
+        stocks_dict = {r["symbol"]: {k: r[k] for k in ("composite_score","technical_score","fundamental_score","sector_tailwind","action")} for r in rows}
+        return {"generated_at": self._iso(date.today()), "scores": rows, "stocks": stocks_dict}
 
     def _build_macro_snapshot(self, day: date, market: dict) -> dict:
         btc = market.get("assets", {}).get("BTCUSDT", {})
@@ -183,12 +452,14 @@ class BacktestingAgent(BaseAgent):
 
     def _build_market_regime(self, day: date, macro: dict) -> dict:
         bias = float(macro.get("market_bias", 0.0))
-        regime = "RISK_ON" if bias > 0.25 else ("RISK_OFF" if bias < -0.25 else "NEUTRAL")
+        vix_val = float((macro.get("series") or {}).get("vix", {}).get("value") or 20.0)
+        # RISK_OFF only when truly stressed: bias very negative OR VIX>30
+        regime = "RISK_ON" if bias > 0.25 else ("RISK_OFF" if (bias < -0.40 or vix_val > 30) else "NEUTRAL")
         return {
             "generated_at": self._iso(day),
             "regime": regime,
             "score": round(bias, 4),
-            "macro_factors": {},
+            "macro_factors": {"vix": vix_val},
             "regional_correlations": {},
             "volatility_sentiment": {},
             "risk_flags": macro.get("risk_flags", []),
@@ -293,9 +564,21 @@ class BacktestingAgent(BaseAgent):
     def _build_crypto_signals(self, day: date, market: dict) -> dict:
         assets = market.get("assets", {})
         picks = []
-        for sym in ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "MKRUSDT", "DYDXUSDT", "LDOUSDT"]:
+        # Supporta sia formato yfinance (BTC-USD) sia formato Bybit (BTCUSDT)
+        CORE_SYMS = {"BTCUSDT", "ETHUSDT", "BTC-USD", "ETH-USD"}
+        candidates = [
+            "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD",
+            "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT",
+            "UNI-USD", "AAVE-USD", "MKR-USD", "LDO-USD", "DYDXUSDT", "LDOUSDT",
+        ]
+        seen_base: set[str] = set()
+        for sym in candidates:
             if sym not in assets:
                 continue
+            base = sym.replace("-USD", "").replace("USDT", "")
+            if base in seen_base:
+                continue
+            seen_base.add(base)
             c4 = assets[sym].get("ohlcv_4h", [])
             if len(c4) < 8:
                 continue
@@ -306,7 +589,7 @@ class BacktestingAgent(BaseAgent):
             score = round(min(1.0, max(0.0, 0.5 + mom7 * 3 + (0.12 if direction == "SHORT" else 0.0))), 3)
             picks.append({
                 "symbol": sym,
-                "bucket": "CORE" if sym in {"BTCUSDT", "ETHUSDT"} else "DEFI_BRIDGE",
+                "bucket": "CORE" if sym in CORE_SYMS else "DEFI_BRIDGE",
                 "direction": direction,
                 "score": score,
                 "last_price": round(last, 6),
@@ -345,7 +628,7 @@ class BacktestingAgent(BaseAgent):
         inst = self.read_json(DATA_DIR / "portfolio_institutional.json")
         return float(retail.get("total_equity", 0.0)) + float(inst.get("total_equity", 0.0))
 
-    def _build_report(self, start: date, end: date, universe: list[str], equity: list[float], returns: list[float]) -> dict:
+    def _build_report(self, start: date, end: date, universe: list[str], equity: list[float], equity_dates: list[str], returns: list[float]) -> dict:
         retail = self.read_json(DATA_DIR / "portfolio_retail.json")
         inst = self.read_json(DATA_DIR / "portfolio_institutional.json")
         all_trades = retail.get("trades", []) + inst.get("trades", [])
@@ -369,12 +652,14 @@ class BacktestingAgent(BaseAgent):
                 "turnover": round(turnover(all_trades, avg_eq), 6),
             },
             "equity_curve": [round(x, 4) for x in equity],
+            "equity_dates": equity_dates,
             "summary": {
                 "trades": len(all_trades),
                 "final_equity": round(equity[-1], 4) if equity else 0.0,
                 "start_equity": round(equity[0], 4) if equity else 0.0,
             },
             "strategy_breakdown": strategy_breakdown,
+            "trades": all_trades,
         }
 
     def _strategy_breakdown(self, trades: list[dict], avg_equity: float) -> dict:
@@ -410,7 +695,31 @@ class BacktestingAgent(BaseAgent):
             DATA_DIR / "validated_signals.json",
         ]:
             if fp.exists():
-                fp.unlink()
+                fp.unlink(missing_ok=True)
+        # Write empty sentinel files so execution_agent never reads stale state.
+        # Retail sentinel uses capital=0 when disabled so it doesn't inflate equity.
+        retail_enabled = bool(self.config.get("retail", {}).get("enabled", True))
+        for mode in ["retail", "institutional"]:
+            cfg = self.config.get(mode, {})
+            if mode == "retail" and not retail_enabled:
+                capital = 0.0
+            else:
+                capital = float(cfg.get("capital", 10000.0))
+            self.write_json(DATA_DIR / f"portfolio_{mode}.json", {
+                "mode": mode,
+                "cash": capital,
+                "total_equity": capital,
+                "peak_equity": capital,
+                "daily_start_equity": capital,
+                "drawdown_pct": 0.0,
+                "initial_capital": capital,
+                "realized_pnl": 0.0,
+                "total_pnl": 0.0,
+                "total_pnl_pct": 0.0,
+                "positions": {},
+                "trades": [],
+            })
+            self.write_json(DATA_DIR / f"stop_orders_{mode}.json", {})
 
     def _set_backtest_context(self, day: date, universe: list[str]) -> None:
         ctx = {
@@ -425,8 +734,9 @@ class BacktestingAgent(BaseAgent):
 
     def _clear_backtest_context(self) -> None:
         fp = DATA_DIR / "backtest_context.json"
-        if fp.exists():
-            fp.unlink()
+        # Scrive sempre enabled:false invece di cancellare il file,
+        # così market_data_agent trova sempre un JSON valido e non entra mai in modalità storica
+        self.write_json(fp, {"enabled": False})
 
     @staticmethod
     def _iso(day: date) -> str:

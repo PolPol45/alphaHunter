@@ -38,11 +38,15 @@ class ExecutionAgent(BaseAgent):
         self._sim = self.config["simulation"]
         self._turnover_cfg = self.config.get("turnover_control", {})
 
+        trading_cfg = self.config.get("trading", {})
+        ibkr_cfg = {"host": "127.0.0.1", "port": 7497, **self.config.get("ibkr", {})}
         self._ibkr         = None
-        self._ibkr_enabled = self.config.get("ibkr", {}).get("enabled", False)
+        self._ibkr_enabled = bool(
+            trading_cfg.get("ibkr_paper_enabled", ibkr_cfg.get("enabled", False))
+        )
         if self._ibkr_enabled:
             from adapters.ibkr_client import IBKRClient
-            self._ibkr = IBKRClient(self.config["ibkr"])
+            self._ibkr = IBKRClient(ibkr_cfg)
             if self._ibkr.connect():
                 self.logger.info(
                     f"IBKR paper adapter ready | account={self._ibkr.account_id}"
@@ -88,14 +92,16 @@ class ExecutionAgent(BaseAgent):
             now = self._now_iso()
 
             # ── Retail execution ──────────────────────────────────────── #
-            self._run_cycle(
-                mode         = "retail",
-                validated    = validated.get("retail", {}),
-                market_doc   = market_doc,
-                portfolio    = port_retail,
-                stop_orders  = stop_retail,
-                ibkr_live    = ibkr_live,
-            )
+            retail_enabled = bool(self.config.get("retail", {}).get("enabled", True))
+            if retail_enabled:
+                self._run_cycle(
+                    mode         = "retail",
+                    validated    = validated.get("retail", {}),
+                    market_doc   = market_doc,
+                    portfolio    = port_retail,
+                    stop_orders  = stop_retail,
+                    ibkr_live    = ibkr_live,
+                )
             port_retail["timestamp"]      = now
             port_retail["execution_mode"] = "ibkr" if ibkr_live else "simulation"
             self._set_account_metadata(port_retail, "retail", ibkr_live)
@@ -197,9 +203,26 @@ class ExecutionAgent(BaseAgent):
         # P1 — check take-profit and trailing stop BEFORE new entries
         self._check_exits(mode, portfolio, market_doc, stop_orders, ibkr_live)
 
+        # P1 fix: enforce max_open_positions and cash_reserve_floor
+        _exec_cfg = self.config.get("execution", {})
+        _max_open = int(_exec_cfg.get("max_open_positions", 12))
+        _cash_floor_pct = float(_exec_cfg.get("cash_reserve_floor_pct", 0.10))
+        _equity = float(portfolio.get("total_equity") or portfolio.get("cash", 0))
+        _cash_floor_abs = _equity * _cash_floor_pct
+        _open_count = sum(1 for p in portfolio.get("positions", {}).values() if float(p.get("quantity", 0)) > 0)
+
         for symbol, vsig in validated.items():
             if not vsig.get("approved"):
                 continue
+            # Skip new BUY entries if portfolio is full or cash below floor
+            if vsig.get("signal_type") == "BUY" and symbol not in portfolio.get("positions", {}):
+                if _open_count >= _max_open:
+                    self.logger.info(f"[{mode}] Max open positions ({_max_open}) reached — skipping {symbol}")
+                    continue
+                if portfolio.get("cash", 0) <= _cash_floor_abs:
+                    self.logger.info(f"[{mode}] Cash floor hit (have {portfolio['cash']:.0f}, floor {_cash_floor_abs:.0f}) — skipping {symbol}")
+                    continue
+                _open_count += 1  # reserve slot optimistically
             if ibkr_live:
                 if self._ibkr_enabled:
                     # ibkr_client natively converts unknown symbols to US STK on SMART
@@ -280,14 +303,100 @@ class ExecutionAgent(BaseAgent):
             self.logger.warning(f"Could not read open orders from IBKR: {exc}")
             return
 
-        for symbol, order_id in list(stop_orders.items()):
-            if int(order_id) not in open_ids:
-                self.logger.info(f"Stop order {order_id} for {symbol} no longer open — closing")
+        for symbol, order_meta in list(stop_orders.items()):
+            meta = self._normalise_exit_orders(order_meta)
+            tracked_ids = {
+                oid
+                for oid in (meta["stop_order_id"], meta["take_profit_order_id"])
+                if oid is not None
+            }
+            if tracked_ids and tracked_ids.intersection(open_ids):
+                continue
+            if tracked_ids:
+                self.logger.info(
+                    f"Exit orders for {symbol} no longer open "
+                    f"(stop={meta['stop_order_id']}, tp={meta['take_profit_order_id']})"
+                )
                 pos = portfolio["positions"].get(symbol, {})
                 if pos.get("quantity", 0) > 0:
-                    close_price = float(pos.get("stop_loss_price") or pos.get("current_price", 0))
-                    self._record_close_trade(symbol, close_price, pos, portfolio, "STOP_LOSS_TRIGGERED_IBKR")
+                    close_price = float(pos.get("current_price") or pos.get("avg_entry_price", 0))
+                    tp_price = float(pos.get("take_profit_price", 0) or 0)
+                    side = pos.get("side", "long")
+                    tp_hit = (
+                        tp_price > 0
+                        and (
+                            (side == "long" and close_price >= tp_price)
+                            or (side == "short" and close_price <= tp_price)
+                        )
+                    )
+                    reason = "TP_HIT" if tp_hit else "SL_HIT"
+                    if reason == "SL_HIT":
+                        close_price = float(pos.get("stop_loss_price") or close_price)
+                    self._record_close_trade(symbol, close_price, pos, portfolio, reason)
+                    portfolio["positions"][symbol] = self._zeroed_position(
+                        pos,
+                        close_price,
+                        pos.get("side", "long"),
+                    )
                 del stop_orders[symbol]
+
+    @staticmethod
+    def _normalise_exit_orders(order_meta: dict | int | float | str | None) -> dict:
+        if isinstance(order_meta, dict):
+            stop_id = order_meta.get("stop_order_id")
+            tp_id = order_meta.get("take_profit_order_id")
+            return {
+                "stop_order_id": int(stop_id) if stop_id is not None else None,
+                "take_profit_order_id": int(tp_id) if tp_id is not None else None,
+                "oca_group": order_meta.get("oca_group"),
+            }
+        if order_meta in (None, "", 0):
+            return {
+                "stop_order_id": None,
+                "take_profit_order_id": None,
+                "oca_group": None,
+            }
+        return {
+            "stop_order_id": int(order_meta),
+            "take_profit_order_id": None,
+            "oca_group": None,
+        }
+
+    @staticmethod
+    def _risk_pct_from_stop(fill_price: float, stop_price: float) -> float:
+        if fill_price <= 0 or stop_price <= 0:
+            return 0.0
+        return abs(fill_price - stop_price) / fill_price
+
+    @classmethod
+    def _build_exit_levels(cls, signal_type: str, fill_price: float, vsig: dict) -> dict:
+        raw_risk_pct = vsig.get("stop_loss_pct")
+        if raw_risk_pct is not None:
+            risk_pct = float(raw_risk_pct)
+        else:
+            risk_pct = cls._risk_pct_from_stop(
+                fill_price,
+                float(vsig.get("stop_loss_price", 0) or 0),
+            )
+        if risk_pct <= 0:
+            risk_pct = 0.03
+
+        r_multiple = float(vsig.get("r_multiple", 1.2) or 1.2)
+        if signal_type == "BUY":
+            stop_price = fill_price * (1.0 - risk_pct)
+            take_profit = fill_price * (1.0 + risk_pct * r_multiple)
+        else:
+            stop_price = fill_price * (1.0 + risk_pct)
+            take_profit = fill_price * (1.0 - risk_pct * r_multiple)
+
+        return {
+            "risk_pct": risk_pct,
+            "r_multiple": r_multiple,
+            "stop_loss_price": round(stop_price, 4),
+            "take_profit_price": round(take_profit, 4),
+            "stop_loss": round(stop_price, 4),
+            "take_profit": round(take_profit, 4),
+        }
 
     def _execute_ibkr_signal(
         self, symbol: str, vsig: dict, portfolio: dict, stop_orders: dict, mode: str
@@ -302,7 +411,6 @@ class ExecutionAgent(BaseAgent):
 
         signal_type = vsig["signal_type"]
         quantity    = float(vsig["quantity"])
-        stop_price  = float(vsig["stop_loss_price"])
         allow_short = (
             bool(self.config.get(mode, {}).get("allow_short", False))
             and bool(self.config.get("ibkr", {}).get("allow_short_orders", False))
@@ -344,11 +452,17 @@ class ExecutionAgent(BaseAgent):
             return
 
         if symbol in stop_orders:
+            existing_exit_orders = self._normalise_exit_orders(stop_orders[symbol])
             try:
-                self._ibkr.cancel_order(int(stop_orders[symbol]))
+                for order_id in (
+                    existing_exit_orders["stop_order_id"],
+                    existing_exit_orders["take_profit_order_id"],
+                ):
+                    if order_id is not None:
+                        self._ibkr.cancel_order(order_id)
                 del stop_orders[symbol]
             except Exception as exc:
-                self.logger.warning(f"[{mode}] Could not cancel old stop for {symbol}: {exc}")
+                self.logger.warning(f"[{mode}] Could not cancel old exits for {symbol}: {exc}")
 
         cash_qty = float(vsig.get("position_size_usdt", 0.0))
         try:
@@ -362,17 +476,23 @@ class ExecutionAgent(BaseAgent):
             return
 
         fill_price = fill["fill_price"]
+        fill_quantity = float(fill.get("quantity") or quantity)
         commission = fill["commission"]
+        exit_levels = self._build_exit_levels(signal_type, fill_price, vsig)
 
         trade = {
             "id":            str(uuid.uuid4()),
             "symbol":        symbol,
             "side":          signal_type,
-            "quantity":      round(quantity, 6),
+            "quantity":      round(fill_quantity, 6),
             "fill_price":    round(fill_price, 4),
-            "notional":      round(fill_price * quantity, 4),
+            "notional":      round(fill_price * fill_quantity, 4),
             "commission":    round(commission, 6),
-            "stop_loss_price": round(stop_price, 4),
+            "stop_loss_price": exit_levels["stop_loss_price"],
+            "take_profit_price": exit_levels["take_profit_price"],
+            "stop_loss":     exit_levels["stop_loss"],
+            "take_profit":   exit_levels["take_profit"],
+            "r_multiple":    exit_levels["r_multiple"],
             "timestamp":     self._now_iso(),
             "reason":        f"SIGNAL_{signal_type}",
             "source":        "ibkr",
@@ -388,11 +508,15 @@ class ExecutionAgent(BaseAgent):
         )
         old_qty   = float(pos.get("quantity", 0))
         old_entry = float(pos.get("avg_entry_price", fill_price))
-        new_qty   = old_qty + quantity
+        new_qty   = old_qty + fill_quantity
         pos["side"]               = desired_side
-        pos["avg_entry_price"]    = round((old_qty * old_entry + quantity * fill_price) / new_qty if new_qty > 0 else fill_price, 6)
+        pos["avg_entry_price"]    = round((old_qty * old_entry + fill_quantity * fill_price) / new_qty if new_qty > 0 else fill_price, 6)
         pos["quantity"]           = round(new_qty, 6)
-        pos["stop_loss_price"]    = round(stop_price, 4)
+        pos["stop_loss_price"]    = exit_levels["stop_loss_price"]
+        pos["take_profit_price"]  = exit_levels["take_profit_price"]
+        pos["stop_loss"]          = exit_levels["stop_loss"]
+        pos["take_profit"]        = exit_levels["take_profit"]
+        pos["r_multiple"]         = exit_levels["r_multiple"]
         pos["current_price"]      = round(fill_price, 4)
         pos["position_value_usdt"] = round(new_qty * fill_price, 4)
         pos["agent_source"]       = vsig.get("agent_source", pos.get("agent_source"))
@@ -401,34 +525,91 @@ class ExecutionAgent(BaseAgent):
         if old_qty == 0:
             pos["entry_atr"]         = round(float(vsig.get("atr", fill_price * 0.02)), 6)
             pos["trailing_high"]     = round(fill_price, 4)
-            pos["take_profit_price"] = 0.0
 
-        stop_action = "SELL" if signal_type == "BUY" else "BUY"
+        exit_action = "SELL" if signal_type == "BUY" else "BUY"
         try:
-            stop_id = self._ibkr.place_stop_order(symbol, stop_action, quantity, stop_price)
-            stop_orders[symbol] = stop_id
+            stop_orders[symbol] = self._ibkr.place_oco_exit_orders(
+                symbol,
+                exit_action,
+                fill_quantity,
+                exit_levels["take_profit_price"],
+                exit_levels["stop_loss_price"],
+            )
             self.logger.info(
                 f"[{mode}] IBKR FILLED {signal_type} {symbol}: "
-                f"qty={quantity} @ {fill_price:.4f} | stop={stop_price:.4f} | stopId={stop_id}"
+                f"qty={fill_quantity} @ {fill_price:.4f} | "
+                f"stop={exit_levels['stop_loss_price']:.4f} | "
+                f"tp={exit_levels['take_profit_price']:.4f}"
             )
         except Exception as exc:
             self.logger.error(
-                f"[{mode}] Could not place stop for {symbol}: {exc} — position open WITHOUT stop!"
+                f"[{mode}] Could not place OCO exits for {symbol}: {exc}"
             )
 
     # ================================================================== #
     # Simulation fallback                                                  #
     # ================================================================== #
 
+    def _fetch_missing_prices(self, symbols: list[str], assets: dict) -> dict[str, float]:
+        """Bulk-fetch live prices for symbols absent from market_data (equities, yfinance-format crypto)."""
+        missing = [s for s in symbols if s not in assets]
+        prices: dict[str, float] = {}
+        if not missing:
+            return prices
+        # During backtest: skip yfinance entirely — use last_price from snapshot or entry price
+        ctx = self.read_json(DATA_DIR / "backtest_context.json")
+        if ctx.get("enabled"):
+            return prices
+        try:
+            import yfinance as yf
+            tickers = " ".join(missing)
+            df = yf.download(tickers, period="2d", interval="1d", progress=False, auto_adjust=True)
+            if df.empty:
+                return prices
+            close = df["Close"] if "Close" in df.columns else df.xs("Close", axis=1, level=0) if isinstance(df.columns, type(df.columns)) and df.columns.nlevels > 1 else df
+            if hasattr(close, "columns"):
+                for sym in missing:
+                    if sym in close.columns:
+                        val = close[sym].dropna()
+                        if not val.empty:
+                            prices[sym] = float(val.iloc[-1])
+            else:
+                # single ticker — close is a Series
+                val = close.dropna()
+                if not val.empty and len(missing) == 1:
+                    prices[missing[0]] = float(val.iloc[-1])
+        except Exception as exc:
+            self.logger.warning(f"yfinance bulk price fetch failed: {exc}")
+        return prices
+
     def _update_sim_positions(self, portfolio: dict, market_doc: dict) -> None:
         assets   = market_doc.get("assets", {})
         to_close = []
 
+        # One bulk yfinance call for all open positions not in market_data (equities / yfinance crypto)
+        open_symbols = [
+            sym for sym, pos in portfolio.get("positions", {}).items()
+            if pos.get("quantity", 0) > 0
+        ]
+        live_prices = self._fetch_missing_prices(open_symbols, assets)
+        if live_prices:
+            self.logger.info(f"yfinance price refresh: {list(live_prices.keys())}")
+
         for symbol, pos in portfolio.get("positions", {}).items():
             if pos.get("quantity", 0) <= 0:
                 continue
-            current_price = float(assets.get(symbol, {}).get("last_price", pos.get("avg_entry_price", 0)))
+            # Priority: Binance market_data → yfinance live → last known price
+            if symbol in assets:
+                current_price = float(assets[symbol].get("last_price", pos.get("avg_entry_price", 0)))
+            elif symbol in live_prices:
+                current_price = live_prices[symbol]
+            else:
+                current_price = float(pos.get("current_price") or pos.get("avg_entry_price", 0))
             pos["current_price"] = round(current_price, 4)
+            # Refresh VWAP from latest market data (ISSUE-001)
+            fresh_vwap = assets.get(symbol, {}).get("vwap")
+            if fresh_vwap:
+                pos["vwap_at_entry"] = fresh_vwap
             qty   = float(pos["quantity"])
             entry = float(pos["avg_entry_price"])
             side  = pos.get("side", "long")
@@ -443,7 +624,21 @@ class ExecutionAgent(BaseAgent):
                     side == "short" and current_price >= stop
                 )
                 if triggered:
-                    to_close.append((symbol, current_price, "STOP_LOSS_TRIGGERED"))
+                    # Hold period minimo: non stoppare prima di min_holding_hours
+                    # Questo evita che il rumore a breve termine chiuda posizioni valide
+                    opened_at = pos.get("opened_at")
+                    min_hold_h = float(
+                        self._turnover_cfg.get("min_holding_hours", 24.0)
+                    )
+                    hours_open = self._hours_since(opened_at, self._now()) if opened_at else None
+                    if hours_open is not None and hours_open < min_hold_h:
+                        # Ancora nel hold period: blocca lo stop a meno che la perdita
+                        # non sia estrema (>2× ATR = segnale di crollo vero)
+                        atr = float(pos.get("entry_atr", entry * 0.02) or entry * 0.02)
+                        extreme_loss = abs(current_price - entry) > 4.0 * atr
+                        if not extreme_loss:
+                            continue  # non chiudere, lascia respirare la posizione
+                    to_close.append((symbol, current_price, "SL_HIT"))
 
         for symbol, price, reason in to_close:
             self._close_sim_position(symbol, price, reason, portfolio)
@@ -460,7 +655,6 @@ class ExecutionAgent(BaseAgent):
         signal_type   = vsig["signal_type"]
         entry_price   = float(vsig["entry_price"])
         quantity      = float(vsig["quantity"])
-        stop_loss     = float(vsig["stop_loss_price"])
         size_usdt     = float(vsig["position_size_usdt"])
         allow_short   = bool(self.config.get(mode, {}).get("allow_short", False))
 
@@ -506,6 +700,7 @@ class ExecutionAgent(BaseAgent):
         notional   = fill_price * quantity
         commission = notional * comm_rate
         cash_delta = self._open_cash_delta(side, notional, commission)
+        exit_levels = self._build_exit_levels(signal_type, fill_price, vsig)
 
         if side == "long":
             cash_needed = abs(cash_delta)
@@ -527,7 +722,11 @@ class ExecutionAgent(BaseAgent):
         pos["side"]               = side
         pos["avg_entry_price"]    = round((old_qty * old_entry + quantity * fill_price) / new_qty if new_qty > 0 else fill_price, 4)
         pos["quantity"]           = round(new_qty, 6)
-        pos["stop_loss_price"]    = round(stop_loss, 4)
+        pos["stop_loss_price"]    = exit_levels["stop_loss_price"]
+        pos["take_profit_price"]  = exit_levels["take_profit_price"]
+        pos["stop_loss"]          = exit_levels["stop_loss"]
+        pos["take_profit"]        = exit_levels["take_profit"]
+        pos["r_multiple"]         = exit_levels["r_multiple"]
         pos["current_price"]      = round(fill_price, 4)
         pos["position_value_usdt"] = round(new_qty * fill_price, 4)
         pos["agent_source"]       = vsig.get("agent_source", pos.get("agent_source"))
@@ -536,7 +735,7 @@ class ExecutionAgent(BaseAgent):
         if old_qty == 0:
             pos["entry_atr"]        = round(float(vsig.get("atr", fill_price * 0.02)), 6)
             pos["trailing_high"]    = round(fill_price, 4)
-            pos["take_profit_price"] = 0.0   # computed lazily in _check_exits
+            pos["vwap_at_entry"]    = vsig.get("vwap")  # VWAP trailing stop (ISSUE-001)
 
         portfolio.setdefault("trades", []).append({
             "id":            str(uuid.uuid4()),
@@ -546,7 +745,11 @@ class ExecutionAgent(BaseAgent):
             "fill_price":    round(fill_price, 4),
             "notional":      round(notional, 4),
             "commission":    round(commission, 4),
-            "stop_loss_price": round(stop_loss, 4),
+            "stop_loss_price": exit_levels["stop_loss_price"],
+            "take_profit_price": exit_levels["take_profit_price"],
+            "stop_loss":     exit_levels["stop_loss"],
+            "take_profit":   exit_levels["take_profit"],
+            "r_multiple":    exit_levels["r_multiple"],
             "timestamp":     self._now_iso(),
             "reason":        f"SIGNAL_{signal_type}",
             "source":        "simulation",
@@ -619,48 +822,61 @@ class ExecutionAgent(BaseAgent):
                 continue
 
             side      = pos.get("side", "long")
-            entry_atr = float(pos.get("entry_atr", entry * 0.02))
-            curr_atr  = self._get_current_atr(symbol, market_doc, entry_atr)
-
-            # Initialise take_profit_price lazily on first check
             tp = float(pos.get("take_profit_price", 0))
             if tp <= 0:
-                fee   = self._sim_params().get("commission_pct", 0.001)
+                risk_pct = self._risk_pct_from_stop(
+                    entry,
+                    float(pos.get("stop_loss_price", 0) or 0),
+                )
+                if risk_pct <= 0:
+                    continue
+                r_multiple = float(pos.get("r_multiple", 1.2) or 1.2)
                 if side == "long":
-                    tp = min(entry + 3.0 * entry_atr, entry * 1.08)
-                    tp = max(tp, entry * (1 + fee * 3))
+                    tp = entry * (1.0 + risk_pct * r_multiple)
                 else:
-                    tp = max(entry - 3.0 * entry_atr, entry * 0.92)
-                    tp = min(tp, entry * (1 - fee * 3))
+                    tp = entry * (1.0 - risk_pct * r_multiple)
                 pos["take_profit_price"] = round(tp, 4)
 
-            # ATR shrinkage: tighten TP to 2× current ATR from entry
-            if curr_atr < entry_atr * 0.80:
-                if side == "long":
-                    pos["take_profit_price"] = round(min(tp, entry + 2.0 * curr_atr), 4)
-                else:
-                    pos["take_profit_price"] = round(max(tp, entry - 2.0 * curr_atr), 4)
-                tp = pos["take_profit_price"]
-
-            # Trailing stop — activates only after +2% gain
-            gain_pct = ((current_price - entry) / entry) if side == "long" else ((entry - current_price) / entry)
-            if gain_pct >= 0.02:
-                trail_high = float(pos.get("trailing_high", current_price))
-                if side == "long":
-                    new_high = max(trail_high, current_price)
-                else:
-                    new_high = min(trail_high, current_price)
-                pos["trailing_high"] = round(new_high, 4)
-                trail_stop = new_high * (1 - 0.025) if side == "long" else new_high * (1 + 0.025)
-                triggered = (side == "long" and current_price <= trail_stop) or \
-                            (side == "short" and current_price >= trail_stop)
-                if triggered:
-                    to_exit.append((symbol, current_price, "TRAILING_STOP"))
-                    continue
+            # VWAP trailing stop (ISSUE-001 — Beat-the-Market paper §3)
+            # Trail = max(SL_price, VWAP) for long; min(SL_price, VWAP) for short
+            # Activates as soon as position is open (no gain threshold required)
+            vwap = assets.get(symbol, {}).get("vwap") or pos.get("vwap_at_entry")
+            sl_price = float(pos.get("stop_loss_price", 0) or 0)
+            if vwap and vwap > 0 and sl_price > 0:
+                # VWAP_TRAIL only activates after minimum holding period (24h)
+                opened_at = pos.get("opened_at") or pos.get("timestamp")
+                hours_held = self._hours_since(opened_at, self._now()) if opened_at else 0
+                if hours_held is not None and hours_held >= 24:
+                    if side == "long":
+                        vwap_trail = max(sl_price, vwap * 0.95)  # 5% buffer below VWAP
+                        if current_price < vwap_trail:
+                            to_exit.append((symbol, current_price, "VWAP_TRAIL"))
+                            continue
+                    else:
+                        vwap_trail = min(sl_price, vwap * 1.05)
+                        if current_price > vwap_trail:
+                            to_exit.append((symbol, current_price, "VWAP_TRAIL"))
+                            continue
+            else:
+                # Fallback: fixed trailing stop — activates only after +2% gain
+                gain_pct = ((current_price - entry) / entry) if side == "long" else ((entry - current_price) / entry)
+                if gain_pct >= 0.02:
+                    trail_high = float(pos.get("trailing_high", current_price))
+                    if side == "long":
+                        new_high = max(trail_high, current_price)
+                    else:
+                        new_high = min(trail_high, current_price)
+                    pos["trailing_high"] = round(new_high, 4)
+                    trail_stop = new_high * (1 - 0.025) if side == "long" else new_high * (1 + 0.025)
+                    triggered = (side == "long" and current_price <= trail_stop) or \
+                                (side == "short" and current_price >= trail_stop)
+                    if triggered:
+                        to_exit.append((symbol, current_price, "TRAILING_STOP"))
+                        continue
 
             # Take-profit check
             if (side == "long" and current_price >= tp) or (side == "short" and current_price <= tp):
-                to_exit.append((symbol, current_price, "TAKE_PROFIT"))
+                to_exit.append((symbol, tp, "TP_HIT"))
 
         for symbol, price, reason in to_exit:
             self.logger.info(f"[{mode}] EXIT → {symbol} @ {price:.4f} ({reason})")
@@ -702,13 +918,19 @@ class ExecutionAgent(BaseAgent):
         close_action = "SELL" if side == "long" else "BUY"
         cash_qty = round(qty * price, 2)
 
-        # Cancel the standing stop order first
+        # Cancel the standing exit orders first
         if symbol in stop_orders:
+            exit_orders = self._normalise_exit_orders(stop_orders[symbol])
             try:
-                self._ibkr.cancel_order(int(stop_orders[symbol]))
+                for order_id in (
+                    exit_orders["stop_order_id"],
+                    exit_orders["take_profit_order_id"],
+                ):
+                    if order_id is not None:
+                        self._ibkr.cancel_order(order_id)
                 del stop_orders[symbol]
             except Exception as exc:
-                self.logger.warning(f"[{mode}] Could not cancel stop for {symbol}: {exc}")
+                self.logger.warning(f"[{mode}] Could not cancel exit orders for {symbol}: {exc}")
 
         try:
             fill = self._ibkr.place_market_order(symbol, close_action, qty, cash_qty=cash_qty)
@@ -843,6 +1065,7 @@ class ExecutionAgent(BaseAgent):
             "position_value_usdt": 0.0,
             "stop_loss_price": 0.0,
             "take_profit_price": 0.0,
+            "r_multiple": 0.0,
             "trailing_high": price,
             "entry_atr": 0.0,
             "side": "long" if signal_type == "BUY" else "short",
@@ -859,6 +1082,8 @@ class ExecutionAgent(BaseAgent):
             "unrealized_pnl_pct": 0.0,
             "position_value_usdt": 0.0,
             "stop_loss_price": 0.0,
+            "take_profit_price": 0.0,
+            "r_multiple": 0.0,
             "side": side,
             "opened_at": pos.get("opened_at"),
             "closed_at": datetime.now(timezone.utc).isoformat(),
