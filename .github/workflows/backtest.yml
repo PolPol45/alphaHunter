@@ -31,13 +31,11 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        working-directory: trading_bot
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Configure backtest window
-        working-directory: trading_bot
         env:
           START_DATE: ${{ github.event.inputs.start_date || '2025-04-01' }}
           END_DATE: ${{ github.event.inputs.end_date || '2026-04-18' }}
@@ -65,10 +63,9 @@ jobs:
           PY
 
       - name: Pre-run disk check
-        run: df -h && du -sh trading_bot/data/ trading_bot/logs/ trading_bot/reports/ 2>/dev/null || true
+        run: df -h && du -sh data/ logs/ reports/ 2>/dev/null || true
 
       - name: Run walk-forward backtest
-        working-directory: trading_bot
         run: |
           mkdir -p logs reports data
           python run_walk_forward.py 2>&1 | tee logs/run_stdout.log
@@ -83,7 +80,6 @@ jobs:
 
       - name: Show final equity
         if: always()
-        working-directory: trading_bot
         run: |
           python - <<'PY'
           import json
@@ -115,13 +111,13 @@ jobs:
           name: backtest-${{ github.run_id }}
           retention-days: 30
           path: |
-            trading_bot/reports/backtest_report_*.json
-            trading_bot/logs/run_stdout.log
-            trading_bot/logs/execution_agent.log
-            trading_bot/logs/risk_agent.log
-            trading_bot/logs/backtesting_agent.log
-            trading_bot/data/portfolio_institutional.json
-            trading_bot/data/portfolio_retail.json
+            reports/backtest_report_*.json
+            logs/run_stdout.log
+            logs/execution_agent.log
+            logs/risk_agent.log
+            logs/backtesting_agent.log
+            data/portfolio_institutional.json
+            data/portfolio_retail.json
 
       - name: Publish reports to backtest-reports branch
         if: success()
@@ -129,7 +125,7 @@ jobs:
           TARGET_BRANCH: backtest-reports
         run: |
           set -euo pipefail
-          REPORT=$(ls trading_bot/reports/backtest_report_*.json 2>/dev/null | head -1)
+          REPORT=$(ls reports/backtest_report_*.json 2>/dev/null | head -1)
           if [ -z "$REPORT" ]; then echo "No report to publish."; exit 0; fi
 
           git config user.name  "github-actions[bot]"
@@ -148,7 +144,7 @@ jobs:
           fi
 
           mkdir -p reports
-          cp trading_bot/reports/backtest_report_*.json reports/ 2>/dev/null || true
+          cp reports/backtest_report_*.json reports/ 2>/dev/null || true
 
           git add reports/
           if git diff --cached --quiet; then echo "No changes."; exit 0; fi
