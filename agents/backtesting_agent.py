@@ -133,6 +133,11 @@ class BacktestingAgent(BaseAgent):
                     self.write_json(DATA_DIR / "stock_scores.json", stock_scores)
 
                     bull = self._build_bull_signals(stock_scores, macro)
+                    # ISSUE-006: merge intraday momentum SPY/QQQ/IWM picks into bull ETF bucket
+                    intraday_picks = self._build_intraday_momentum_signals(day, market, macro)
+                    if intraday_picks:
+                        bull.setdefault("allocations", {}).setdefault("etf_50_pct", [])
+                        bull["allocations"]["etf_50_pct"] = intraday_picks + bull["allocations"]["etf_50_pct"]
                     bear = self._build_bear_signals(stock_scores, macro)
                     crypto = self._build_crypto_signals(day, market)
                     self.write_json(DATA_DIR / "bull_signals.json", bull)
@@ -622,6 +627,50 @@ class BacktestingAgent(BaseAgent):
                 "total_picks": len(core) + len(bridge),
             },
         }
+
+    def _build_intraday_momentum_signals(self, day: date, market: dict, macro: dict) -> list[dict]:
+        """ISSUE-006: Intraday Momentum SPY/QQQ/IWM overlay (Beat-the-Market §6).
+        Computes short-term momentum breakout for broad market ETFs.
+        High score → market ETF BUY, sized at max 5% capital via noise band breakout.
+        Uses 20-period band (mu ± 1.5σ) as noise filter, same as ISSUE-002."""
+        ETF_SYMS = ["SPY", "QQQ", "IWM"]
+        assets = market.get("assets", {})
+        picks = []
+        for sym in ETF_SYMS:
+            data = assets.get(sym, {})
+            ohlcv = data.get("ohlcv_4h") or data.get("ohlcv_1d") or []
+            closes = [float(c["c"]) for c in ohlcv if c.get("c")]
+            if len(closes) < 22:
+                continue
+            last = closes[-1]
+            window = closes[-21:-1]
+            mu = sum(window) / len(window)
+            sigma = (sum((x - mu) ** 2 for x in window) / len(window)) ** 0.5
+            upper = mu + 1.5 * sigma
+            lower = mu - 1.5 * sigma
+            mom_1d = (closes[-1] - closes[-2]) / closes[-2] if closes[-2] > 0 else 0.0
+            mom_5d = (closes[-1] - closes[-6]) / closes[-6] if len(closes) >= 6 and closes[-6] > 0 else 0.0
+            # Breakout above upper band → strong BUY
+            if last > upper and mom_5d > 0.005:
+                score = round(min(1.0, 0.70 + mom_5d * 5), 3)
+                market_bias = float(macro.get("market_bias", 0.0))
+                if market_bias < -0.30:
+                    continue  # Suppress during strong risk-off
+                picks.append({
+                    "symbol": sym,
+                    "composite_score": score,
+                    "_signal_type": "BUY",
+                    "_agent_source": "bull",
+                    "_ta_last_price": round(last, 4),
+                    "_noise_bands": {"upper": round(upper, 4), "lower": round(lower, 4), "sigma": round(sigma, 4)},
+                    "_tier_size_mult": 0.5,  # Max 5% capital cap per paper spec
+                    "_tier_sl_mult": 1.5,
+                    "_tier_tp_mult": 2.0,
+                    "momentum_1d": round(mom_1d * 100, 2),
+                    "momentum_5d": round(mom_5d * 100, 2),
+                    "source": "intraday_momentum_spy",
+                })
+        return picks
 
     def _current_total_equity(self) -> float:
         retail = self.read_json(DATA_DIR / "portfolio_retail.json")

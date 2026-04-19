@@ -64,30 +64,28 @@ class CryptoStrategyAgent(BaseAgent):
     def run(self) -> bool:
         self.mark_running()
         try:
-            import yfinance as yf
-
             # 1. Macro crypto regime
-            regime, macro_score = self._analyze_crypto_macro(yf)
+            regime, macro_score = self._analyze_crypto_macro()
             self.logger.info(
                 f"Crypto regime: {regime} | macro_score: {macro_score:+.2f}"
             )
 
             # 2. Core: BTC + ETH (sempre analizzati, peso 50%)
             core_results = self._analyze_bucket(
-                yf, self.core_universe, "CORE", macro_score, is_meme=False
+                self.core_universe, "CORE", macro_score, is_meme=False
             )
 
             # 3. DeFi/Bridge layer (30%): DEX + ETF + MSTR proxy
             bridge_results = self._analyze_bucket(
-                yf, self.bridge_universe, "DEFI_BRIDGE", macro_score, is_meme=False
+                self.bridge_universe, "DEFI_BRIDGE", macro_score, is_meme=False
             )
 
             # 4. Altcoin (15%) + Memecoin (5%)
             alt_results  = self._analyze_bucket(
-                yf, self.alt_universe, "ALTCOIN", macro_score, is_meme=False
+                self.alt_universe, "ALTCOIN", macro_score, is_meme=False
             )
             meme_results = self._analyze_bucket(
-                yf, self.meme_universe, "MEMECOIN", macro_score, is_meme=True
+                self.meme_universe, "MEMECOIN", macro_score, is_meme=True
             )
             alt_and_meme = alt_results + meme_results
 
@@ -150,7 +148,7 @@ class CryptoStrategyAgent(BaseAgent):
     # Level 1: Crypto Macro Regime
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _analyze_crypto_macro(self, yf) -> tuple[str, float]:
+    def _analyze_crypto_macro(self) -> tuple[str, float]:
         """
         Determina il regime crypto (BULL / NEUTRAL / BEAR) basandosi su:
           - BTC momentum e RSI (proxy dominance)
@@ -161,39 +159,38 @@ class CryptoStrategyAgent(BaseAgent):
 
         # ── BTC come barometro dell'intero mercato crypto ──────────────────── #
         try:
-            btc = yf.Ticker("BTC-USD")
-            hist = btc.history(period="1y", interval="1d")
-            if len(hist) >= 200:
-                closes = hist["Close"].values.astype(float)
-                ema50  = self._ema(closes, 50)[-1]
-                ema200 = self._ema(closes, 200)[-1]
-                rsi    = self._rsi(closes)
-                last   = float(closes[-1])
+            _btc_data = self._get_price_history("BTC-USD", min_bars=200)
+            if _btc_data is not None:
+                closes, volumes = _btc_data
+                if len(closes) >= 200:
+                    ema50  = self._ema(closes, 50)[-1]
+                    ema200 = self._ema(closes, 200)[-1]
+                    rsi    = self._rsi(closes)
+                    last   = float(closes[-1])
 
-                # BTC trend
-                if last > ema200: score += 0.30
-                if last > ema50:  score += 0.15
-                if ema50 > ema200: score += 0.15  # golden cross
+                    # BTC trend
+                    if last > ema200: score += 0.30
+                    if last > ema50:  score += 0.15
+                    if ema50 > ema200: score += 0.15  # golden cross
 
-                # RSI
-                if rsi > 60:  score += 0.10
-                elif rsi < 35: score -= 0.20
+                    # RSI
+                    if rsi > 60:  score += 0.10
+                    elif rsi < 35: score -= 0.20
 
-                # Momentum 30gg
-                mom_30d = (closes[-1] - closes[-30]) / closes[-30]
-                if mom_30d > 0.15:   score += 0.15
-                elif mom_30d > 0.05: score += 0.08
-                elif mom_30d < -0.15: score -= 0.20
-                elif mom_30d < -0.05: score -= 0.10
+                    # Momentum 30gg
+                    mom_30d = (closes[-1] - closes[-30]) / closes[-30]
+                    if mom_30d > 0.15:   score += 0.15
+                    elif mom_30d > 0.05: score += 0.08
+                    elif mom_30d < -0.15: score -= 0.20
+                    elif mom_30d < -0.05: score -= 0.10
 
-                # Volume surge proxy (ultimi 7gg vs precedenti 23gg)
-                volumes = hist["Volume"].values.astype(float)
-                vol_recent = float(np.mean(volumes[-7:]))
-                vol_baseline = float(np.mean(volumes[-30:-7]))
-                if vol_baseline > 0:
-                    vol_ratio = vol_recent / vol_baseline
-                    if vol_ratio > 1.5:   score += 0.10
-                    elif vol_ratio < 0.7: score -= 0.05
+                    # Volume surge proxy (ultimi 7gg vs precedenti 23gg)
+                    vol_recent = float(np.mean(volumes[-7:]))
+                    vol_baseline = float(np.mean(volumes[-30:-7]))
+                    if vol_baseline > 0:
+                        vol_ratio = vol_recent / vol_baseline
+                        if vol_ratio > 1.5:   score += 0.10
+                        elif vol_ratio < 0.7: score -= 0.05
 
         except Exception as e:
             self.logger.warning(f"BTC macro probe failed: {e}")
@@ -242,17 +239,17 @@ class CryptoStrategyAgent(BaseAgent):
     # ─────────────────────────────────────────────────────────────────────────
 
     def _analyze_bucket(
-        self, yf, universe: list[str], bucket: str,
+        self, universe: list[str], bucket: str,
         macro_score: float, is_meme: bool
     ) -> list[dict]:
         results = []
         for symbol in universe:
             try:
-                res = self._analyze_crypto_asset(yf, symbol, bucket, macro_score, is_meme)
+                res = self._analyze_crypto_asset(symbol, bucket, macro_score, is_meme)
                 if res:
                     results.append(res)
                     self.logger.debug(
-                        f"{symbol:12s} [{bucket}] score: {res['score']:.2f} | " 
+                        f"{symbol:12s} [{bucket}] score: {res['score']:.2f} | "
                         f"dir: {res['direction']:5s} | "
                         f"rsi: {res['rsi']:.1f} | mom7d: {res['momentum_7d']:+.1f}%"
                     )
@@ -261,17 +258,17 @@ class CryptoStrategyAgent(BaseAgent):
         return results
 
     def _analyze_crypto_asset(
-        self, yf, symbol: str, bucket: str,
+        self, symbol: str, bucket: str,
         macro_score: float, is_meme: bool
     ) -> dict | None:
 
-        ticker = yf.Ticker(symbol)
-        hist   = ticker.history(period="1y", interval="1d")
-        if len(hist) < 30:
+        _data = self._get_price_history(symbol, min_bars=30)
+        if _data is None:
             return None
 
-        closes  = hist["Close"].values.astype(float)
-        volumes = hist["Volume"].values.astype(float)
+        closes, volumes = _data
+        if len(closes) < 30:
+            return None
         last    = float(closes[-1])
 
         # ── Indicatori tecnici ─────────────────────────────────────────────── #
@@ -415,6 +412,38 @@ class CryptoStrategyAgent(BaseAgent):
             "golden_cross": bool(ema50 > ema200),
             "macd_bull":    bool(macd_bull),
         }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Price data helpers (cache-first, yfinance fallback)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _get_price_history(self, symbol: str, min_bars: int = 30) -> tuple[np.ndarray, np.ndarray] | None:
+        """Return (closes, volumes) arrays. Reads sector_price_cache.json first."""
+        cache_key = f"{symbol}_365d"
+        cache = self.read_json(DATA_DIR / "sector_price_cache.json") or {}
+        entry = cache.get(cache_key) or cache.get(f"{symbol}_250d") or cache.get(f"{symbol}_100d")
+        if entry and "records" in entry:
+            records = entry["records"]
+            if len(records) >= min_bars:
+                try:
+                    closes  = np.array([float(r.get("close", r.get("Close", 0))) for r in records], dtype=float)
+                    volumes = np.array([float(r.get("volume", r.get("Volume", 0))) for r in records], dtype=float)
+                    if len(closes) >= min_bars and float(closes[-1]) > 0:
+                        return closes, volumes
+                except Exception:
+                    pass
+        # fallback: yfinance (live mode or cache miss)
+        try:
+            import yfinance as yf
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="1y", interval="1d")
+            if len(hist) >= min_bars:
+                closes  = hist["Close"].values.astype(float)
+                volumes = hist["Volume"].values.astype(float)
+                return closes, volumes
+        except Exception as e:
+            self.logger.warning(f"yfinance fallback failed for {symbol}: {e}")
+        return None
 
     # ─────────────────────────────────────────────────────────────────────────
     # Technical helpers

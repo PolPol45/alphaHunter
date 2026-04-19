@@ -5,6 +5,8 @@ import uuid
 import yfinance as yf
 from datetime import datetime, timezone
 
+import requests
+import feedparser
 from agents.base_agent import BaseAgent, DATA_DIR
 from adapters.fred_client import FredClient
 
@@ -18,6 +20,15 @@ class MacroAnalyzerAgent(BaseAgent):
     def run(self) -> bool:
         self.mark_running()
         try:
+            # In backtest: skip all live FRED/yfinance calls — regime already in market_regime.json
+            _backtest_mode = self.config.get("orchestrator", {}).get("mode") == "backtest"
+            if _backtest_mode:
+                existing = self.read_json(DATA_DIR / "macro_snapshot.json") or {}
+                if existing:
+                    self.logger.info("Backtest mode — reusing cached macro_snapshot, skip live fetch")
+                    self.mark_done()
+                    return True
+
             self.logger.info("Fetching macro data from FRED...")
             fed_funds_hist = self._fetch_fred_history("FEDFUNDS")
             fed_funds = fed_funds_hist[-1] if fed_funds_hist else None
@@ -82,6 +93,30 @@ class MacroAnalyzerAgent(BaseAgent):
                 "news_sentiment_score": self._fetch_news_sentiment()
             }
             
+            # --- FASE 14: NLP Macro Intelligence (LLM Integration) ---
+            llm_enabled = self.config.get("llm_nlp_enabled", False)
+            llm_result = {"sentiment_bias": 0.0, "narrative": "LLM NLP disabled."}
+            
+            if llm_enabled:
+                self.logger.info("Fase 14: NLP Intelligence starting. Fetching news feeds...")
+                news_text = self._fetch_rss_news()
+                if news_text:
+                    self.logger.info("Asking LLM to analyze sentiment...")
+                    llm_result = self._analyze_sentiment_llm(news_text)
+                    if llm_result and "sentiment_bias" in llm_result:
+                        llm_bias = float(llm_result["sentiment_bias"])
+                        # Iniezione Quantitativa: Modifichiamo pesantemente lo SCORE Macro
+                        # Se l'LLM fischia panico puro, crolla lo score
+                        if llm_bias < -0.6:
+                            self.logger.critical(f"⚠️ LLM MACRO PANIC DETECTED! Narrative: {llm_result.get('narrative')}")
+                            score = min(score, llm_bias)
+                        else:
+                            # Mixiamo 70% quantitativo, 30% qualitativo
+                            score = round((score * 0.7) + (llm_bias * 0.3), 2)
+                        
+                        regime = "RISK_ON" if score > 0.1 else ("RISK_OFF" if score < -0.1 else "NEUTRAL")
+            # -------------------------------------------------------------
+            
             risk_flags = self._generate_risk_flags(vix, dxy)
             
             # Confidence: HIGH if >=3 data sources available, LOW if <=1
@@ -113,7 +148,8 @@ class MacroAnalyzerAgent(BaseAgent):
                 "risk_flags": risk_flags,
                 "summary": {
                     "headline": f"Market remains in {regime} mode",
-                    "explanation": f"Calculated score of {score}. VIX is at {vix or 'unknown'}, indicating {'high' if (vix and vix > 20) else 'stable'} volatility."
+                    "explanation": f"Calculated score of {score}. VIX is at {vix or 'unknown'}, indicating {'high' if (vix and vix > 20) else 'stable'} volatility.",
+                    "llm_narrative": llm_result.get("narrative", "")
                 }
             }
             
@@ -290,6 +326,78 @@ class MacroAnalyzerAgent(BaseAgent):
         if news_data and "summary_metrics" in news_data:
             return round(float(news_data["summary_metrics"].get("average_sentiment", 0.0)), 2)
         return 0.0
+
+    # --- FASE 14 METODI NLP ---
+    
+    def _fetch_rss_news(self) -> str:
+        """Fetch e consolida le testate giornalistiche finanziarie."""
+        feeds = [
+            "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664", # Finance
+            "https://cointelegraph.com/rss" # Crypto
+        ]
+        
+        consolidated = []
+        try:
+            for url in feeds:
+                d = feedparser.parse(url)
+                for entry in d.entries[:5]: # Take top 5 per feed
+                    consolidated.append(f"- {entry.title}: {entry.get('summary', '')}")
+            return "\\n".join(consolidated)
+        except Exception as e:
+            self.logger.warning(f"Failed to fetch RSS: {e}")
+            return ""
+
+    def _analyze_sentiment_llm(self, news_text: str) -> dict:
+        """Invia i testi ad un LLM via OpenRouter o Ollama locale."""
+        llm_config = self.config.get("llm_nlp", {})
+        provider = llm_config.get("provider", "openrouter")
+        api_key = llm_config.get("api_key", "")
+        model = llm_config.get("model", "meta-llama/llama-3-8b-instruct:free")
+        
+        prompt = (
+            "Sei un Chief Economist per un Hedge Fund Quantitativo.\\n"
+            "Leggi le seguenti breaking news e quantifica rigorosamente il sentiment Macro.\\n"
+            "Rispondi ESCLUSIVAMENTE con un JSON valido strutturato così:\\n"
+            '{"sentiment_bias": float da -1.0 a +1.0, "narrative": "Tua spiegazione testuale concisa"}\\n\\n'
+            f"NEWS:\\n{news_text}"
+        )
+
+        try:
+            if provider == "openrouter" and api_key:
+                headers = {"Authorization": f"Bearer {api_key}"}
+                payload = {
+                    "model": model,
+                    "response_format": {"type": "json_object"},
+                    "messages": [
+                        {"role": "system", "content": "Sei un bot JSON NLP specializzato in finanza."},
+                        {"role": "user", "content": prompt}
+                    ]
+                }
+                resp = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=20)
+                if resp.status_code == 200:
+                    content = resp.json()
+                    json_str = content['choices'][0]['message']['content']
+                    return json.loads(json_str)
+                    
+            elif provider == "ollama":
+                endpoint = llm_config.get("endpoint", "http://localhost:11434/api/generate")
+                payload = {
+                    "model": model,
+                    "prompt": prompt,
+                    "format": "json",
+                    "stream": False
+                }
+                resp = requests.post(endpoint, json=payload, timeout=30)
+                if resp.status_code == 200:
+                    json_str = resp.json().get("response", "{}")
+                    return json.loads(json_str)
+                    
+        except Exception as e:
+            self.logger.warning(f"Error during LLM sentiment analysis: {e}")
+            
+        return {"sentiment_bias": 0.0, "narrative": "LLM failed or skipped"}
+    
+    # -------------------------
 
     def _from_snapshot(self, snapshot: dict) -> dict:
         """Build a market regime dict from a macro_snapshot.json-style document."""

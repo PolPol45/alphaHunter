@@ -1,0 +1,15 @@
+[Unit]
+Description=Trading Bot ZMQ Broker
+After=network.target
+
+[Service]
+Type=simple
+User=root
+# Adjust this path based on your Linux distribution
+WorkingDirectory=/opt/trading_bot
+ExecStart=/opt/trading_bot/venv/bin/python infrastructure/zmq_broker.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

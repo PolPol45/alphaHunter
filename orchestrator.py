@@ -38,12 +38,14 @@ from agents.macro_analyzer_agent import MacroAnalyzerAgent
 from agents.sector_analyzer_agent import SectorAnalyzerAgent
 from agents.stock_analyzer_agent import StockAnalyzerAgent
 from agents.news_data_agent import NewsDataAgent
+from agents.telegram_sentiment_agent import TelegramSentimentAgent
 from agents.technical_analysis_agent import TechnicalAnalysisAgent
 from agents.risk_agent import RiskAgent
 from agents.execution_agent import ExecutionAgent
 from agents.report_agent import ReportAgent
 from agents.alpha_hunter_agent import AlphaHunterAgent
 from agents.bull_strategy_agent import BullStrategyAgent
+from agents.pairs_arbitrage_agent import PairsArbitrageAgent
 from agents.bear_strategy_agent import BearStrategyAgent
 from agents.crypto_strategy_agent import CryptoStrategyAgent
 from agents.portfolio_manager import PortfolioManager
@@ -51,6 +53,12 @@ from agents.backtesting_agent import BacktestingAgent
 from agents.feature_store_agent import FeatureStoreAgent
 from agents.ml_strategy_agent import MLStrategyAgent
 from agents.adaptive_learner import AdaptiveLearner
+from agents.auditor_agent import AuditorAgent
+from agents.ml_cross_sectional_agent import MLCrossSectionalAgent
+from agents.sentiment_analyzer_agent import SentimentAnalyzerAgent
+from agents.universe_discovery_agent import UniverseDiscoveryAgent
+from agents.universe_hygiene_agent import UniverseHygieneAgent
+from agents.alternative_data_agent import AlternativeDataAgent
 from agents.base_agent import (
     BASE_DIR, DATA_DIR, LOGS_DIR, REPORTS_DIR, SHARED_STATE_PATH, CONFIG_PATH
 )
@@ -85,6 +93,8 @@ class Orchestrator:
         self.sector_agent    = SectorAnalyzerAgent()
         self.stock_agent     = StockAnalyzerAgent()
         self.news_agent      = NewsDataAgent()
+        self.telegram_agent  = TelegramSentimentAgent()
+        self.pairs_agent     = PairsArbitrageAgent()
         self.ta_agent        = TechnicalAnalysisAgent()
         self.risk_agent      = RiskAgent()
         self.execution_agent = ExecutionAgent()
@@ -114,6 +124,14 @@ class Orchestrator:
         # ML learning pipeline
         self.feature_store_agent = FeatureStoreAgent()
         self.ml_strategy_agent = MLStrategyAgent()
+        self.ml_cross_sectional_agent = MLCrossSectionalAgent()
+
+        # Sentiment, Universe, Auditor
+        self.sentiment_agent = SentimentAnalyzerAgent()
+        self.alternative_data_agent = AlternativeDataAgent()
+        self.universe_discovery_agent = UniverseDiscoveryAgent()
+        self.universe_hygiene_agent = UniverseHygieneAgent()
+        self.auditor_agent = AuditorAgent()
 
         # Adaptive Learner — aggiorna parametri di rischio ogni ciclo
         self.adaptive_learner = AdaptiveLearner()
@@ -204,6 +222,11 @@ class Orchestrator:
                 "portfolio_manager":          {"status": "idle", "last_run": None, "last_error": None},
                 "feature_store_agent":        {"status": "idle", "last_run": None, "last_error": None},
                 "ml_strategy_agent":          {"status": "idle", "last_run": None, "last_error": None},
+                "ml_cross_sectional_agent":   {"status": "idle", "last_run": None, "last_error": None},
+                "sentiment_analyzer_agent":   {"status": "idle", "last_run": None, "last_error": None},
+                "universe_discovery_agent":   {"status": "idle", "last_run": None, "last_error": None},
+                "universe_hygiene_agent":     {"status": "idle", "last_run": None, "last_error": None},
+                "auditor_agent":              {"status": "idle", "last_run": None, "last_error": None},
                 "adaptive_learner":           {"status": "idle", "last_run": None, "last_error": None},
             },
             "data_freshness": {
@@ -254,16 +277,22 @@ class Orchestrator:
             self.logger.info(f"── Cycle #{cycle_count} done ──────────────────")
 
             elapsed = time.time() - cycle_start
-            sleep_time = max(0.0, self.config["orchestrator"]["cycle_interval_seconds"] - elapsed)
+            _backtest_mode = self.config.get("orchestrator", {}).get("mode") == "backtest"
+            _interval = 0.0 if _backtest_mode else float(
+                self.config["orchestrator"]["cycle_interval_seconds"]
+            )
+            sleep_time = max(0.0, _interval - elapsed)
 
             if not self._shutdown_requested:
-                self.logger.info(
-                    f"Cycle took {elapsed:.1f}s. Sleeping {sleep_time:.1f}s until next cycle."
-                )
-                # Sleep in short chunks so SIGINT is handled promptly
-                deadline = time.time() + sleep_time
-                while not self._shutdown_requested and time.time() < deadline:
-                    time.sleep(min(1.0, deadline - time.time()))
+                if _backtest_mode:
+                    self.logger.info(f"Cycle took {elapsed:.1f}s. Backtest mode — no sleep.")
+                else:
+                    self.logger.info(
+                        f"Cycle took {elapsed:.1f}s. Sleeping {sleep_time:.1f}s until next cycle."
+                    )
+                    deadline = time.time() + sleep_time
+                    while not self._shutdown_requested and time.time() < deadline:
+                        time.sleep(min(1.0, deadline - time.time()))
 
         self._shutdown()
 
@@ -323,13 +352,31 @@ class Orchestrator:
                 f"next at cycle {(cycle_count // self._feature_bg_cadence + 1) * self._feature_bg_cadence + 1})"
             )
 
+        # Step 2.74: Alternative data — Fear&Greed + xStocks L2 orderbook imbalance
+        self._run_agent("alternative_data_agent", self.alternative_data_agent)
+
+        # Step 2.75: Sentiment analysis — VADER NLP on RSS feeds
+        self._run_agent("sentiment_analyzer_agent", self.sentiment_agent)
+
         # Step 2.8: ML strategy — re-trains every refresh_days (default 30d), reads feature history
         ml_ok = self._run_agent("ml_strategy_agent", self.ml_strategy_agent)
+
+        # Step 2.85: ML cross-sectional — weekly dataset builder + pipeline
+        if cycle_count % 7 == 1:
+            self._run_agent("ml_cross_sectional_agent", self.ml_cross_sectional_agent)
         if not ml_ok:
             self.logger.warning("MLStrategyAgent failed — RiskAgent will proceed without ML boost")
 
         # Step 3: News analysis
         news_ok = self._run_agent("news_data_agent", self.news_agent)
+
+        # Step 3c: Pairs arbitrage (ogni ciclo — veloce, no network calls)
+        self._run_agent("pairs_arbitrage_agent", self.pairs_agent)
+
+        # Step 3b: Telegram sentiment (ogni 10 cicli ~10 min, non ogni minuto)
+        _tg_enabled = self.config.get("telegram_sentiment", {}).get("enabled", False)
+        if _tg_enabled and cycle_count % 10 == 0:
+            self._run_agent("telegram_sentiment_agent", self.telegram_agent)
         if not news_ok:
             self.logger.warning("NewsDataAgent failed — skipping TA, Risk, Execution this cycle")
             self._update_cycle_state(cycle_count)
@@ -350,7 +397,9 @@ class Orchestrator:
 
         if self.bull_agent is not None:
             self._run_agent("bull_strategy_agent", self.bull_agent)
-            
+            # ISSUE-006: Inject intraday momentum SPY/QQQ/IWM into bull_signals ETF bucket
+            self._inject_intraday_momentum_signals()
+
         if self.bear_agent is not None:
             self._run_agent("bear_strategy_agent", self.bear_agent)
 
@@ -384,6 +433,14 @@ class Orchestrator:
         # Step 5d: Adaptive Learner — aggiorna parametri di rischio in base alle performance
         self._run_agent("adaptive_learner", self.adaptive_learner)
 
+        # Step 5e: Universe Discovery + Hygiene (ogni 10 cicli)
+        if cycle_count % 10 == 1:
+            self._run_agent("universe_discovery_agent", self.universe_discovery_agent)
+            self._run_agent("universe_hygiene_agent", self.universe_hygiene_agent)
+
+        # Step 5f: Auditor (ogni ciclo — usa LLM se abilitato in config)
+        self._run_agent("auditor_agent", self.auditor_agent)
+
         # Step 6: Report (hourly, independent of pipeline failures)
         report_interval = self.config["orchestrator"]["report_interval_seconds"]
         if time.time() - self._last_report_time >= report_interval:
@@ -396,6 +453,59 @@ class Orchestrator:
         # Step 7: Periodic auto-backtest (non-blocking background thread)
         if self._auto_backtest_enabled:
             self._maybe_trigger_auto_backtest()
+
+    def _inject_intraday_momentum_signals(self) -> None:
+        """ISSUE-006: Intraday Momentum SPY/QQQ/IWM — live orchestrator integration.
+        Reads market_data.json, computes 20-period noise band breakout for broad market ETFs,
+        and prepends valid picks to bull_signals.json ETF bucket before RiskAgent runs."""
+        import math
+        try:
+            def _rj(p):
+                try:
+                    return json.loads(p.read_text(encoding="utf-8"))
+                except Exception:
+                    return {}
+            mkt = _rj(DATA_DIR / "market_data.json")
+            bull = _rj(DATA_DIR / "bull_signals.json")
+            assets = mkt.get("assets", {})
+            ETF_SYMS = ["SPY", "QQQ", "IWM"]
+            intraday_picks = []
+            for sym in ETF_SYMS:
+                data = assets.get(sym, {})
+                ohlcv = data.get("ohlcv_4h") or data.get("ohlcv_1d") or []
+                closes = [float(c["c"]) for c in ohlcv if c.get("c") and float(c["c"]) > 0]
+                if len(closes) < 22:
+                    continue
+                last = closes[-1]
+                window = closes[-21:-1]
+                mu = sum(window) / len(window)
+                variance = sum((x - mu) ** 2 for x in window) / len(window)
+                sigma = math.sqrt(variance)
+                upper = mu + 1.5 * sigma
+                lower = mu - 1.5 * sigma
+                mom_5d = (closes[-1] - closes[-6]) / closes[-6] if len(closes) >= 6 and closes[-6] > 0 else 0.0
+                if last > upper and mom_5d > 0.005:
+                    score = round(min(1.0, 0.70 + mom_5d * 5), 3)
+                    intraday_picks.append({
+                        "symbol": sym,
+                        "composite_score": score,
+                        "_signal_type": "BUY",
+                        "_agent_source": "bull",
+                        "_ta_last_price": round(last, 4),
+                        "_noise_bands": {"upper": round(upper, 4), "lower": round(lower, 4), "sigma": round(sigma, 4)},
+                        "_tier_size_mult": 0.5,
+                        "_tier_sl_mult": 1.5,
+                        "_tier_tp_mult": 2.0,
+                        "momentum_5d": round(mom_5d * 100, 2),
+                        "source": "intraday_momentum_spy",
+                    })
+            if intraday_picks:
+                bull.setdefault("allocations", {}).setdefault("etf_50_pct", [])
+                bull["allocations"]["etf_50_pct"] = intraday_picks + bull["allocations"]["etf_50_pct"]
+                (DATA_DIR / "bull_signals.json").write_text(json.dumps(bull, indent=2), encoding="utf-8")
+                self.logger.info(f"ISSUE-006: Injected {len(intraday_picks)} intraday momentum picks: {[p['symbol'] for p in intraday_picks]}")
+        except Exception as e:
+            self.logger.warning(f"_inject_intraday_momentum_signals failed: {e}")
 
     def _launch_background_agent(
         self,

@@ -39,6 +39,14 @@ class StockAnalyzerAgent(BaseAgent):
     def run(self) -> bool:
         self.mark_running()
         try:
+            # Backtest: skip live yfinance stock scoring — reuse existing stock_scores.json
+            if self.config.get("orchestrator", {}).get("mode") == "backtest":
+                existing = self.read_json(DATA_DIR / "stock_scores.json") or {}
+                if existing:
+                    self.logger.info("Backtest mode — reusing stock_scores.json, skip live fetch")
+                    self.mark_done()
+                    return True
+
             if not self.all_symbols:
                 self.logger.warning("No equities found in master_universe. Skipped.")
                 self.mark_done()

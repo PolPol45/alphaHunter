@@ -108,10 +108,55 @@ class AlphaHunterAgent(BaseAgent):
         try:
             import yfinance as yf  # lazy import — not needed by other agents
 
+            _backtest_mode = self.config.get("orchestrator", {}).get("mode") == "backtest"
+
+            # In backtest: restrict universe to symbols available in market_data.json
+            # to avoid 275 live yfinance calls (9 min per cycle → unusable for backtest)
+            if _backtest_mode:
+                mkt = self.read_json(DATA_DIR / "market_data.json") or {}
+                available = set(mkt.get("assets", {}).keys())
+                original_universe = self._universe
+                self._universe = [s for s in self._universe if s in available]
+                if not self._universe:
+                    self.logger.info("AlphaHunter: nessun simbolo con dati backtest — skip")
+                    self.mark_done()
+                    return True
+                self.logger.info(
+                    f"AlphaHunter backtest: {len(self._universe)}/{len(original_universe)} "
+                    f"simboli da market_data ({', '.join(self._universe[:5])}...)"
+                )
+
+            # In backtest mode: load price cache to avoid live yfinance calls per symbol
+            _price_cache: dict = {}
+            if _backtest_mode:
+                cache_doc = self.read_json(DATA_DIR / "sector_price_cache.json") or {}
+                # sector_price_cache format: {"{SYM}_100d": {"ts": ..., "records": [{Date,Open,High,Low,Close,...}]}}
+                for key, val in cache_doc.items():
+                    if not key.endswith("_100d") or not isinstance(val, dict):
+                        continue
+                    sym = key.replace("_100d", "")
+                    records = val.get("records", [])
+                    if records:
+                        _price_cache[sym] = {
+                            "closes": [float(r["Close"]) for r in records],
+                            "highs":  [float(r["High"])  for r in records],
+                            "lows":   [float(r["Low"])   for r in records],
+                        }
+                # Also pull from market_data.json for crypto/main assets
+                mkt = self.read_json(DATA_DIR / "market_data.json") or {}
+                for sym, info in mkt.get("assets", {}).items():
+                    candles = info.get("ohlcv_1d", [])
+                    if candles:
+                        _price_cache[sym] = {
+                            "closes": [float(c["c"]) for c in candles],
+                            "highs":  [float(c["h"]) for c in candles],
+                            "lows":   [float(c["l"]) for c in candles],
+                        }
+
             signals: dict[str, dict] = {}
             for symbol in self._universe:
                 try:
-                    sig = self._analyze(yf, symbol)
+                    sig = self._analyze(yf, symbol, _price_cache if _backtest_mode else None)
                     signals[symbol] = sig
                     self.logger.info(
                         f"{symbol:6s}: {sig['signal_type']:4s} "
@@ -164,18 +209,33 @@ class AlphaHunterAgent(BaseAgent):
     # Per-symbol analysis pipeline                                        #
     # ------------------------------------------------------------------ #
 
-    def _analyze(self, yf, symbol: str) -> dict:
-        ticker = yf.Ticker(symbol)
+    def _analyze(self, yf, symbol: str, price_cache: dict | None = None) -> dict:
+        # ── 1. Price history — cache-first in backtest mode ───────────── #
+        closes = highs = lows = None
 
-        # ── 1. Price history (1 year, daily) ──────────────────────────── #
-        hist = ticker.history(period="1y", interval="1d", auto_adjust=True)
-        if len(hist) < 60:
-            return self._hold_signal(symbol)
+        if price_cache and symbol in price_cache:
+            cached = price_cache[symbol]
+            if isinstance(cached, dict) and "closes" in cached:
+                closes = np.array(cached["closes"], dtype=float)
+                highs  = np.array(cached.get("highs",  cached["closes"]), dtype=float)
+                lows   = np.array(cached.get("lows",   cached["closes"]), dtype=float)
+            elif isinstance(cached, list) and len(cached) > 0:
+                # flat list of closes
+                closes = np.array(cached, dtype=float)
+                highs  = closes.copy()
+                lows   = closes.copy()
 
-        closes = hist["Close"].values.astype(float)
-        highs  = hist["High"].values.astype(float)
-        lows   = hist["Low"].values.astype(float)
-        last   = float(closes[-1])
+        if closes is None or len(closes) < 60:
+            # Fallback: live yfinance (only in live mode or cache miss)
+            ticker = yf.Ticker(symbol)
+            hist = ticker.history(period="1y", interval="1d", auto_adjust=True)
+            if len(hist) < 60:
+                return self._hold_signal(symbol)
+            closes = hist["Close"].values.astype(float)
+            highs  = hist["High"].values.astype(float)
+            lows   = hist["Low"].values.astype(float)
+
+        last = float(closes[-1])
 
         # ── 2. ATR-14 ─────────────────────────────────────────────────── #
         atr = self._atr(highs, lows, closes, 14)

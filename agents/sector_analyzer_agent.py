@@ -21,6 +21,13 @@ class SectorAnalyzerAgent(BaseAgent):
     def run(self) -> bool:
         self.mark_running()
         try:
+            if self.config.get("orchestrator", {}).get("mode") == "backtest":
+                existing = self.read_json(DATA_DIR / "sector_scorecard.json") or {}
+                if existing:
+                    self.logger.info("Backtest mode — reusing sector_scorecard.json, skip live fetch")
+                    self.mark_done()
+                    return True
+
             if not self.sector_map:
                 self.logger.warning("No sector_map defined in config.json. Skipping SectorAnalyzerAgent.")
                 self.mark_done()

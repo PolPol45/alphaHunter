@@ -138,10 +138,13 @@ class TechnicalAnalysisAgent(BaseAgent):
                     # float < 0.60 = equity below threshold → downgrade BUY → HOLD
                     stock_composite = stock_min_scores.get(symbol, None)
                     # Compute noise bands from raw daily candles (before DataFrame conversion)
-                    noise_bands = self._compute_noise_bands(data.get("ohlcv_1d", []))
+                    candles_1d = data.get("ohlcv_1d", [])
+                    noise_bands = self._compute_noise_bands(candles_1d)
+
+                    # ISSUE-003: Realized volatility 14d per asset
+                    realized_vol_14d = self._compute_realized_vol_14d(candles_1d)
 
                     # Detect daily patterns from 1d candles
-                    candles_1d = data.get("ohlcv_1d", [])
                     patterns = self._detect_daily_patterns(candles_1d)
 
                     retail_sig = self._generate_signal(
@@ -150,8 +153,10 @@ class TechnicalAnalysisAgent(BaseAgent):
                         context=news_context,
                         regime_blocks_buy=regime_blocks_buy,
                         stock_composite_score=stock_composite,
+                        symbol=symbol,
                     )
                     retail_sig["noise_bands"] = noise_bands
+                    retail_sig["realized_vol_14d"] = realized_vol_14d
                     # Apply pattern boost and DOW multiplier to retail score
                     r_score = self._apply_pattern_boost(retail_sig["score"], retail_sig["signal_type"], patterns)
                     r_score = min(1.0, r_score * dow_mult)
@@ -166,8 +171,10 @@ class TechnicalAnalysisAgent(BaseAgent):
                             context=news_context,
                             regime_blocks_buy=regime_blocks_buy,
                             stock_composite_score=stock_composite,
+                            symbol=symbol,
                         )
                         inst_sig["noise_bands"] = noise_bands
+                        inst_sig["realized_vol_14d"] = realized_vol_14d
                         # Apply pattern boost and DOW multiplier to institutional score
                         i_score = self._apply_pattern_boost(inst_sig["score"], inst_sig["signal_type"], patterns)
                         i_score = min(1.0, i_score * dow_mult)
@@ -209,7 +216,7 @@ class TechnicalAnalysisAgent(BaseAgent):
                     "top_alerts": news_feed.get("top_alerts", [])[:5],
                 },
             }
-            self.write_json(DATA_DIR / "signals.json", signals_doc)
+            self.require_write(DATA_DIR / "signals.json", signals_doc)
             self.update_shared_state("data_freshness.signals", signals_doc["timestamp"])
 
             r_summary = {s: d["signal_type"] for s, d in retail_signals.items()}
@@ -292,6 +299,7 @@ class TechnicalAnalysisAgent(BaseAgent):
         d["ema_trend"] = self._ema(d["close"], 50)
         # RSI
         d["rsi"] = self._rsi(d["close"], 14)
+        d["rsi5"] = self._rsi(d["close"], 5)
         # MACD
         ema12 = self._ema(d["close"], 12)
         ema26 = self._ema(d["close"], 26)
@@ -351,6 +359,7 @@ class TechnicalAnalysisAgent(BaseAgent):
         context: dict | None = None,
         regime_blocks_buy: bool = False,
         stock_composite_score: float | None = None,
+        symbol: str | None = None,
     ) -> dict:
         curr = df_4h.iloc[-1]
         prev = df_4h.iloc[-2]
@@ -426,6 +435,19 @@ class TechnicalAnalysisAgent(BaseAgent):
             buy_score  += 0.08
         elif roc < -3.0:
             sell_score += 0.08
+
+        # 8. RSI-5 gamma imbalance proxy (Beat-the-Market §5.3)
+        # High RSI-5 → dealers long gamma → momentum smorzato → penalizza BUY
+        # Low RSI-5  → dealers short gamma → momentum amplificato → boost BUY
+        rsi5 = float(curr["rsi5"]) if not np.isnan(curr["rsi5"]) else 50.0
+        if rsi5 > 75:
+            buy_score  = max(0.0, buy_score  - 0.08)  # gamma smorzamento
+        elif rsi5 < 25:
+            buy_score  = min(1.0, buy_score  + 0.06)  # gamma amplificazione
+        if rsi5 < 25:
+            sell_score = max(0.0, sell_score - 0.06)  # short gamma: meno vendita efficace
+        elif rsi5 > 75:
+            sell_score = min(1.0, sell_score + 0.04)
 
         buy_score  = min(buy_score,  1.0)
         sell_score = min(sell_score, 1.0)
@@ -521,12 +543,14 @@ class TechnicalAnalysisAgent(BaseAgent):
             "ema9_cross_dn": ema9_cross_dn,
             "atr":         round(atr_val, 4),
             "rsi":         round(rsi, 2),
+            "rsi5":        round(rsi5, 2),
             "adx":         round(adx, 2),
             "ema_trend":   round(daily_ema50, 4),
             "regime_filter_applied": regime_blocks_buy,
             "stock_score_filter_applied": stock_filter_applied,
             "mode":        mode,
             "context_adjustment": adjustment_breakdown,
+            "asset_role":  self.get_asset_role(symbol),
         }
 
     @staticmethod
@@ -544,6 +568,7 @@ class TechnicalAnalysisAgent(BaseAgent):
             "ema9_cross_dn": False,
             "atr": 0.0,
             "rsi": 50.0,
+            "rsi5": 50.0,
             "adx": 0.0,
             "ema_trend": 0.0,
             "regime_filter_applied": False,
@@ -630,6 +655,24 @@ class TechnicalAnalysisAgent(BaseAgent):
             "lower": round(lower_anchor * (1 - sigma), 6),
             "sigma": round(sigma, 6),
         }
+
+    @staticmethod
+    def _compute_realized_vol_14d(candles_1d: list[dict]) -> float | None:
+        """ISSUE-003: 14-day realized volatility (annualised daily std dev of log-returns).
+        Used by RiskAgent to scale position size via vol-targeting.
+        Returns annualised float (e.g. 0.25 = 25% annual vol) or None if insufficient data."""
+        if len(candles_1d) < 16:
+            return None
+        import math
+        closes = [float(c["c"]) for c in candles_1d[-15:] if c.get("c") and float(c["c"]) > 0]
+        if len(closes) < 15:
+            return None
+        log_rets = [math.log(closes[i] / closes[i - 1]) for i in range(1, len(closes))]
+        n = len(log_rets)
+        mu = sum(log_rets) / n
+        variance = sum((r - mu) ** 2 for r in log_rets) / max(1, n - 1)
+        daily_vol = math.sqrt(max(variance, 0.0))
+        return round(daily_vol * math.sqrt(252), 6)  # annualise
 
     @staticmethod
     def _detect_daily_patterns(candles_1d: list[dict]) -> dict:

@@ -36,8 +36,10 @@ class RiskAgent(BaseAgent):
                 "bear_hedge": 0.55,
                 "bear_short": 0.68,
                 "bear_bankrupt": 0.66,
-                "ta_crypto": 0.65,   # TA signals need higher bar — no fundamental filter
+                "ta_crypto": 0.65,
                 "ta_retail": 0.65,
+                "alpha": 0.58,       # IV/HV mispricing + momentum + value composite
+                "pairs": 0.55,       # z-score pairs arbitrage (market neutral)
             },
         )
         self._market_vol_extreme_vix = float(self._risk_cfg.get("market_vol_extreme_vix", 28.0))
@@ -76,12 +78,15 @@ class RiskAgent(BaseAgent):
             bear_sig    = self.read_json(DATA_DIR / "bear_signals.json") or {}
             crypto_sig  = self.read_json(DATA_DIR / "crypto_signals.json") or {}
             ta_sig      = self.read_json(DATA_DIR / "signals.json") or {}
+            alpha_sig   = self.read_json(DATA_DIR / "alpha_signals.json") or {}
             macro_doc    = self.read_json(DATA_DIR / "macro_snapshot.json") or {}
             market_regime = self.read_json(DATA_DIR / "market_regime.json") or {}
             mkt_data    = self.read_json(DATA_DIR / "market_data.json") or {}
             ml_signals  = self.read_json(DATA_DIR / "ml_signals.json") or {}
             news_doc    = self.read_json(DATA_DIR / "news_feed.json") or {}
+            tg_doc      = self.read_json(DATA_DIR / "telegram_sentiment.json") or {}
             sector_doc  = self.read_json(DATA_DIR / "sector_scorecard.json") or {}
+            alt_data    = self.read_json(DATA_DIR / "alternative_data.json") or {}
 
             # Read portfolios state
             port_retail = self.read_json(DATA_DIR / "portfolio_retail.json") or {}
@@ -92,6 +97,9 @@ class RiskAgent(BaseAgent):
             raw_bear_signals   = self._extract_bear(bear_sig)
             raw_crypto_signals = self._extract_crypto(crypto_sig)
             raw_ta_signals     = self._extract_ta(ta_sig)
+            raw_alpha_signals  = self._extract_alpha(alpha_sig)
+            pairs_sig          = self.read_json(DATA_DIR / "pairs_signals.json") or {}
+            raw_pairs_signals  = self._extract_pairs(pairs_sig)
             returns_map        = self._build_returns_map(mkt_data)
 
             # 2b. Apply ML score boost where available (skip if stale)
@@ -100,7 +108,6 @@ class RiskAgent(BaseAgent):
             _ml_fresh = False
             if _ml_generated:
                 try:
-                    from datetime import datetime, timezone
                     _ml_age = (datetime.now(timezone.utc) - datetime.fromisoformat(_ml_generated)).total_seconds()
                     _ml_fresh = _ml_age <= _ml_max_stale
                     if not _ml_fresh:
@@ -108,12 +115,22 @@ class RiskAgent(BaseAgent):
                 except Exception:
                     pass
             ml_boost_map = self._build_ml_boost_map(ml_signals) if _ml_fresh else {}
+            # IC gate: skip ML boost entirely if model IC < 0.05 (worse than random)
+            _ml_ic = float(ml_signals.get("avg_ic_across_folds", ml_signals.get("avg_val_ic", 0.0)) or 0.0)
+            _ml_ic_threshold = float(self._risk_cfg.get("ml_ic_threshold", 0.05))
+            _ml_ic_valid = _ml_ic >= _ml_ic_threshold
             if ml_boost_map:
-                self._apply_ml_boost(raw_bull_signals, ml_boost_map)
-                self._apply_ml_boost(raw_bear_signals, ml_boost_map)
-                self._apply_ml_boost(raw_crypto_signals, ml_boost_map)
-                self._apply_ml_boost(raw_ta_signals, ml_boost_map)
-                self.logger.info("ML boost applied to %d symbols", len(ml_boost_map))
+                if _ml_ic_valid:
+                    self._apply_ml_boost(raw_bull_signals, ml_boost_map)
+                    self._apply_ml_boost(raw_bear_signals, ml_boost_map)
+                    self._apply_ml_boost(raw_ta_signals, ml_boost_map)
+                    self._apply_ml_boost(raw_alpha_signals, ml_boost_map)
+                    self.logger.info("ML boost applied to %d symbols (IC=%.3f)", len(ml_boost_map), _ml_ic)
+                else:
+                    self.logger.warning(f"ML boost SKIPPED — IC={_ml_ic:.3f} below threshold {_ml_ic_threshold:.2f}")
+                # Crypto boost only when IC is valid — negative IC on crypto amplifies losses
+                if _ml_ic_valid:
+                    self._apply_ml_boost(raw_crypto_signals, ml_boost_map)
 
             # 2c. Apply news sentiment boost
             news_boost_map = self._build_news_boost_map(news_doc)
@@ -121,11 +138,22 @@ class RiskAgent(BaseAgent):
                 self._apply_ml_boost(raw_bull_signals, news_boost_map)
                 self._apply_ml_boost(raw_bear_signals, news_boost_map)
                 self._apply_ml_boost(raw_ta_signals, news_boost_map)
+                self._apply_ml_boost(raw_alpha_signals, news_boost_map)
+
+            # 2e. Apply Telegram sentiment boost (canali DeFi/crypto)
+            tg_boost_map = self._build_news_boost_map(tg_doc)
+            if tg_boost_map:
+                self._apply_ml_boost(raw_bull_signals, tg_boost_map)
+                self._apply_ml_boost(raw_crypto_signals, tg_boost_map)
+                self._apply_ml_boost(raw_ta_signals, tg_boost_map)
+                self._apply_ml_boost(raw_alpha_signals, tg_boost_map)
+                self.logger.info(f"Telegram boost applicato a {len(tg_boost_map)} simboli (bias={tg_doc.get('overall_bias', 0):+.3f})")
 
             # 2d. Apply sector momentum boost
             sector_boost_map = self._build_sector_boost_map(sector_doc)
             if sector_boost_map:
                 self._apply_ml_boost(raw_bull_signals, sector_boost_map)
+                self._apply_ml_boost(raw_alpha_signals, sector_boost_map)
 
             # 3. Macro & Correlation Filter rules
             # Single source of truth: market_regime.json (issue #176)
@@ -140,6 +168,83 @@ class RiskAgent(BaseAgent):
             risk_off           = (regime_label == "RISK_OFF")
             market_vol_extreme = regime_vix >= self._market_vol_extreme_vix
 
+            # --- FASE 11: Dynamic Correlation Monitor & Eigenvalue Monitoring ---
+            def calculate_systemic_risk() -> tuple[float, float, str]:
+                import numpy as np
+                if not returns_map or len(returns_map) < 10:
+                    return 0.0, 0.0, "GREEN"
+                valid_symbols = list(returns_map.keys())
+                min_len = min([len(r) for r in returns_map.values()])
+                if min_len < 10: return 0.0, 0.0, "GREEN"
+                
+                # Matrice rendimenti
+                matrix = [returns_map[sym][-min_len:] for sym in valid_symbols]
+                returns_array = np.array(matrix)
+                # Calcola correlazione
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    corr_matrix = np.corrcoef(returns_array)
+                corr_matrix = np.nan_to_num(corr_matrix)
+                
+                # Correlazione Media Inter-Asset (excluding diagonal)
+                num_assets = corr_matrix.shape[0]
+                upper_triangle = np.triu_indices_from(corr_matrix, k=1)
+                avg_corr = float(np.mean(corr_matrix[upper_triangle])) if len(upper_triangle[0]) > 0 else 0.0
+                
+                # Eigenvalue Absorption Ratio (PCA proxy)
+                try:
+                    eigenvalues = np.linalg.eigvalsh(corr_matrix)
+                    eigenvalues = np.sort(eigenvalues)[::-1]
+                    total_var = np.sum(eigenvalues)
+                    top_3_var = np.sum(eigenvalues[:3])
+                    abs_ratio = float(top_3_var / total_var) if total_var > 0 else 0.0
+                except Exception:
+                    abs_ratio = 0.0
+                    
+                alert = "GREEN"
+                if avg_corr > 0.90 or abs_ratio > 0.70:
+                    alert = "RED"
+                elif avg_corr > 0.80:
+                    alert = "YELLOW"
+                return avg_corr, abs_ratio, alert
+
+            sys_avg_corr, sys_abs_ratio, systemic_alert = calculate_systemic_risk()
+            if systemic_alert == "RED":
+                self.logger.critical(f"🚨 SYSTEMIC RISK RED! AvgCorr: {sys_avg_corr:.2f}, AbsRatio: {sys_abs_ratio:.2f}. Forzatura Risk-Off Totale.")
+                risk_off = True
+                regime_label = "RISK_OFF"
+                market_vol_extreme = True
+            elif systemic_alert == "YELLOW":
+                self.logger.warning(f"⚠️ SYSTEMIC RISK YELLOW. AvgCorr: {sys_avg_corr:.2f}, AbsRatio: {sys_abs_ratio:.2f}. Massima Prusenza Consigliata.")
+
+            # --- Fase 3: Killswitch basato su Montecarlo Stress Testing ---
+            mc_metrics = self.read_json(DATA_DIR / "montecarlo_metrics.json") or {}
+            mc_dd_95th = abs(float(mc_metrics.get("max_drawdown_95th", 0.0)))
+
+            # Leggiamo il drawdown del portafoglio principale
+            current_dd = float(port_inst.get("drawdown_pct", 0.0))
+            if mc_dd_95th > 0 and current_dd >= mc_dd_95th:
+                self.logger.critical(f"🚨 MONTECARLO KILLSWITCH ATTIVATO! Drawdown Attuale ({current_dd*100:.1f}%) "
+                                     f">= Montecarlo 95th Percentile DD ({mc_dd_95th*100:.1f}%). "
+                                     f"Forzatura Risk-Off totale!")
+                risk_off = True
+
+            # --- Fase 3b: Hard DD cap 20% con partial recovery unlock a 10% ---
+            _hard_dd_max = float(self._risk_cfg.get("hard_dd_killswitch_pct", 0.20))
+            _hard_dd_recovery = float(self._risk_cfg.get("hard_dd_recovery_pct", 0.10))
+            _dd_killswitch_active = bool((self.read_json(DATA_DIR / "dd_killswitch.json") or {}).get("active", False))
+            if current_dd >= _hard_dd_max:
+                _dd_killswitch_active = True
+                self.write_json(DATA_DIR / "dd_killswitch.json", {"active": True, "dd_at_trigger": current_dd})
+                self.logger.critical(f"🚨 HARD DD KILLSWITCH: DD={current_dd*100:.1f}% >= {_hard_dd_max*100:.0f}%. Tutti BUY bloccati.")
+                risk_off = True
+            elif _dd_killswitch_active and current_dd <= _hard_dd_recovery:
+                self.write_json(DATA_DIR / "dd_killswitch.json", {"active": False, "dd_at_trigger": 0.0})
+                _dd_killswitch_active = False
+                self.logger.info(f"✅ HARD DD KILLSWITCH rimosso: DD recuperata a {current_dd*100:.1f}% <= {_hard_dd_recovery*100:.0f}%.")
+            elif _dd_killswitch_active:
+                self.logger.warning(f"⏳ DD killswitch attivo (DD={current_dd*100:.1f}% > recovery {_hard_dd_recovery*100:.0f}%). BUY bloccati.")
+                risk_off = True
+
             # market_bias kept from macro_snapshot for granular bull/crypto filters
             # (continuous score used for threshold comparisons, not binary gate)
             market_bias = float(macro_doc.get("market_bias", 0.0) or 0.0)
@@ -151,12 +256,15 @@ class RiskAgent(BaseAgent):
                 )
 
             # 4. Generate structured retail & institutional output
+            # 4. Generate structured retail & institutional output
             retail_enabled = bool(self._retail_cfg.get("enabled", True))
             retail_validated = self._process_mode(
                 "retail", self._retail_cfg, port_retail, raw_bull_signals, raw_bear_signals, raw_crypto_signals,
                 risk_off, market_bias, market_vol_extreme, mkt_data, returns_map, raw_ta_signals,
                 regime_label=regime_label,
                 regime_vix=regime_vix,
+                systemic_alert=systemic_alert,
+                alt_data=alt_data,
             ) if retail_enabled else {}
 
             inst_validated = self._process_mode(
@@ -164,19 +272,81 @@ class RiskAgent(BaseAgent):
                 risk_off, market_bias, market_vol_extreme, mkt_data, returns_map, raw_ta_signals,
                 regime_label=regime_label,
                 regime_vix=regime_vix,
+                systemic_alert=systemic_alert,
+                alt_data=alt_data,
             )
+
+            # Pairs Arbitrage — market-neutral long/short
+            pairs_cfg = self.config.get("pairs_arbitrage", {})
+            pairs_enabled = bool(pairs_cfg.get("enabled", True))
+            pairs_validated = {}
+            if pairs_enabled and raw_pairs_signals:
+                _pairs_mode_cfg = {
+                    "total_capital": float(pairs_cfg.get("capital", 50_000.0)),
+                    "sub": {
+                        "pairs": {
+                            "capital": float(pairs_cfg.get("capital", 50_000.0)),
+                            "active": True,
+                            "strategy": "pairs_arbitrage",
+                        }
+                    },
+                }
+                pairs_validated = self._process_mode(
+                    "pairs", _pairs_mode_cfg, port_inst,
+                    raw_pairs_signals, [], [],
+                    risk_off, market_bias, market_vol_extreme, mkt_data, returns_map,
+                    ta=[],
+                    regime_label=regime_label,
+                    regime_vix=regime_vix,
+                    systemic_alert=systemic_alert,
+                    alt_data=alt_data,
+                )
+                p_app = [k for k, v in pairs_validated.items() if v.get("approved")]
+                self.logger.info(f"Pairs arbitrage signals approved: {len(p_app)}")
+
+            # Alpha Hunter — passa attraverso RiskAgent con tutti i filtri attivi
+            alpha_cfg = self.config.get("alpha_hunter", {})
+            alpha_enabled = bool(alpha_cfg.get("enabled", False))
+            port_alpha = self.read_json(DATA_DIR / "portfolio_alpha.json") or {}
+            alpha_validated = {}
+            if alpha_enabled and raw_alpha_signals:
+                # Costruisce un pseudo-config istituzionale per alpha
+                _alpha_mode_cfg = {
+                    "total_capital": float(alpha_cfg.get("capital", 100_000.0)),
+                    "sub": {
+                        "alpha": {
+                            "capital": float(alpha_cfg.get("capital", 100_000.0)),
+                            "active": True,
+                            "strategy": "alpha_hunter",
+                        }
+                    },
+                }
+                alpha_validated = self._process_mode(
+                    "alpha", _alpha_mode_cfg, port_alpha,
+                    raw_alpha_signals, [], [],   # alpha signals go as "bull" bucket
+                    risk_off, market_bias, market_vol_extreme, mkt_data, returns_map,
+                    ta=[],
+                    regime_label=regime_label,
+                    regime_vix=regime_vix,
+                    systemic_alert=systemic_alert,
+                    alt_data=alt_data,
+                )
+                a_app = [k for k, v in alpha_validated.items() if v.get("approved")]
+                self.logger.info(f"Alpha Hunter signals approved by RiskAgent: {len(a_app)}")
 
             validated = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "retail": retail_validated,
                 "institutional": inst_validated,
+                "alpha": alpha_validated,
+                "pairs": pairs_validated,
             }
-            
-            self.write_json(DATA_DIR / "validated_signals.json", validated)
+
+            self.require_write(DATA_DIR / "validated_signals.json", validated)
             self.update_shared_state("data_freshness.validated_signals", validated["timestamp"])
-            
-            r_app = [k for k, v in retail_validated.items() if v["approved"]]
-            i_app = [k for k, v in inst_validated.items() if v["approved"]]
+
+            r_app = [k for k, v in retail_validated.items() if v.get("approved")]
+            i_app = [k for k, v in inst_validated.items() if v.get("approved")]
             self.logger.info(f"Risk mapping complete. Approved Retail: {len(r_app)} | Approved Inst: {len(i_app)}")
             self.mark_done()
             return True
@@ -282,6 +452,69 @@ class RiskAgent(BaseAgent):
             })
         return out
 
+    def _extract_pairs(self, pairs_sig: dict) -> list:
+        """Convert pairs_signals.json into flat candidate list (one entry per leg)."""
+        out = []
+        for sig in pairs_sig.get("signals", []):
+            if sig.get("action_a") in ("BUY", "SELL"):
+                out.append({
+                    "symbol":          sig["leg_a"],
+                    "composite_score": float(sig.get("score", 0.65)),
+                    "_agent_source":   "pairs",
+                    "_signal_type":    sig["action_a"],
+                    "_ta_last_price":  sig.get("price_a"),
+                    "_pairs_zscore":   sig.get("zscore"),
+                    "_pairs_leg":      "a",
+                    "_pairs_partner":  sig["leg_b"],
+                })
+            if sig.get("action_b") in ("BUY", "SELL"):
+                out.append({
+                    "symbol":          sig["leg_b"],
+                    "composite_score": float(sig.get("score", 0.65)),
+                    "_agent_source":   "pairs",
+                    "_signal_type":    sig["action_b"],
+                    "_ta_last_price":  sig.get("price_b"),
+                    "_pairs_zscore":   sig.get("zscore"),
+                    "_pairs_leg":      "b",
+                    "_pairs_partner":  sig["leg_a"],
+                })
+        return out
+
+    def _extract_alpha(self, alpha_sig: dict) -> list:
+        """Convert alpha_signals.json into the common candidate format."""
+        signals = alpha_sig.get("signals", {})
+        top_candidates = alpha_sig.get("scanner", {}).get("top_candidates", [])
+        # Use pre-ranked top candidates if available, else sort raw signals
+        if not top_candidates:
+            top_candidates = sorted(
+                [{"symbol": sym, **v} for sym, v in signals.items()
+                 if v.get("signal_type") in ("BUY", "SELL")],
+                key=lambda x: max(x.get("buy_score", 0), x.get("sell_score", 0)),
+                reverse=True,
+            )[:8]
+        out = []
+        for row in top_candidates[:8]:
+            sym = row.get("symbol")
+            if not sym:
+                continue
+            raw = signals.get(sym, row)
+            sig_type = raw.get("signal_type", "HOLD")
+            if sig_type not in ("BUY", "SELL"):
+                continue
+            score = float(raw.get("buy_score" if sig_type == "BUY" else "sell_score", 0.0))
+            out.append({
+                "symbol":          sym,
+                "composite_score": score,
+                "_agent_source":   "alpha",
+                "_signal_type":    sig_type,
+                "_ta_stop_loss":   raw.get("stop_loss"),
+                "_ta_take_profit": raw.get("take_profit"),
+                "_ta_last_price":  raw.get("last_price"),
+                "_iv_hv_ratio":    raw.get("iv_hv_ratio"),
+                "_rsi":            raw.get("rsi"),
+            })
+        return out
+
     def _extract_crypto(self, crypto_sig: dict) -> list:
         allocs = crypto_sig.get("allocations", {})
         out = []
@@ -315,16 +548,37 @@ class RiskAgent(BaseAgent):
         ta: list | None = None,
         regime_label: str = "NEUTRAL",
         regime_vix: float = 15.0,
+        systemic_alert: str = "GREEN",
+        alt_data: dict | None = None,
     ) -> dict:
         validated = {}
         subs = config.get("sub", {})
         total_cash = portfolio.get("cash", 0.0)
         mode_equity = float(portfolio.get("total_equity") or portfolio.get("initial_capital") or total_cash or 0.0)
+
+        # Alternative data signals (safe defaults if not available)
+        _alt = alt_data or {}
+        xstocks_imbalance = _alt.get("xstocks_imbalance", {})
+        funding_rates     = _alt.get("funding_rates", {})
+        options_pcr       = _alt.get("options_pcr", {})
+        btc_netflow       = _alt.get("btc_exchange_netflow", {})
+        hist_funding      = _alt.get("historical_funding", {})
+        
+        # --- FASE 11: Regime ROSSO (Concentrazione Sistemica) ---
+        if systemic_alert == "RED":
+            # Forziamo minimo 50% di quota Cash allocando massimali solo alla prima metà.
+            allowed_investment_capital = mode_equity * 0.50
+            total_cash = min(total_cash, allowed_investment_capital)
+            
         selected_symbols = []
         sub_exposure = {"crypto": 0.0, "bull": 0.0, "bear": 0.0}
 
         # Helper inner function to process a list of candidates
         def process_candidates(candidates, sub_name, max_picks=3, is_bear=False):
+            # Se siamo in emergenza rossa, riduciamo chirurgicamente da 30-40 posizioni totali a ~10 massimo
+            if systemic_alert == "RED":
+                max_picks = max(1, max_picks // 3)
+                
             sub_cfg = subs.get(sub_name, {})
             if not sub_cfg.get("active"):
                 return
@@ -334,7 +588,7 @@ class RiskAgent(BaseAgent):
             base_stake = (cap * 0.8) / max_picks
             base_stake *= self._strategy_weight_multiplier(sub_name, portfolio)
             # Applica peso adattivo da AdaptiveLearner (learned_strategy_weights)
-            adaptive_key = "crypto" if "crypto" in sub_name else ("bear" if "bear" in sub_name else "bull")
+            adaptive_key = "crypto" if "crypto" in sub_name else ("bear" if "bear" in sub_name else ("alpha" if sub_name == "alpha" else "bull"))
             base_stake *= float(self._adaptive_strategy_weights.get(adaptive_key, 1.0))
 
             # If total_cash is running low, truncate the global stake size (e.g. system is fully invested)
@@ -389,12 +643,42 @@ class RiskAgent(BaseAgent):
                 if score < score_floor:
                     continue
 
-                # Macro penalty
-                if risk_off and not is_bear and score < 0.70:
+                # --- Fase 2: Meta-Labeling Filter (Dynamic Risk Overlay) ---
+                meta_confidence = float(item.get("meta_confidence", 0.5))
+                # Se c'è un segnale dal ML Meta-Classifier ma ha confidenza negativa/bassa (< 0.60)...
+                if "meta_confidence" in item and meta_confidence < 0.60:
+                    self.logger.info(f"Meta-Labeling blocked {sym}: Confidence {meta_confidence:.2f} < 0.60")
+                    continue
+
+                # Macro penalty — applied only to BUY (longs); SELL quality filtered by role gate
+                _risk_off_threshold = 0.65 if regime_label in ("BEAR", "RISK_OFF") else 0.70
+                if signal_type == "BUY" and risk_off and not is_bear and score < _risk_off_threshold:
                     continue # Reject weak longs during risk off
 
-                # Regime filter: bull blocked only in clear risk-off, crypto more permissive
+                # Filtro di Non Esitazione (Strict Hesitation Filter): blocca segnali mediocri in mercati laterali
+                if regime_label == "NEUTRAL":
+                    if score < 0.72:
+                        continue
+
+                # --- Institutional Knowledge: role-based regime gate ---
+                _role_cfg  = self.get_role_config(sym)
+                _role_name = self.get_asset_role(sym)
+                _role_rules = _role_cfg.get("regime_rules", {}).get(regime_label, {})
+                if signal_type == "BUY" and not _role_rules.get("allow_long", True):
+                    self.logger.debug(f"Role gate blocked BUY {sym} (role={_role_name}, regime={regime_label})")
+                    continue
+                if signal_type == "SELL" and not _role_rules.get("allow_short", True):
+                    self.logger.debug(f"Role gate blocked SELL {sym} (role={_role_name}, regime={regime_label})")
+                    continue
+                # Bond/inverse ETFs skip bull slot — low vol wastes capital
+                if signal_type == "BUY" and source == "bull" and _role_cfg.get("skip_bull_slot", False):
+                    self.logger.debug(f"Bull slot gate blocked {sym} (role={_role_name})")
+                    continue
+
+                # Regime filter: bull blocked in BEAR/RISK_OFF entirely
                 if signal_type == "BUY" and source == "bull":
+                    if risk_off or regime_label in ("BEAR", "RISK_OFF"):
+                        continue
                     if market_bias < -0.15 or market_vol_extreme:
                         continue
                 if signal_type == "BUY" and source == "crypto":
@@ -403,6 +687,11 @@ class RiskAgent(BaseAgent):
 
                 # Bear hedge always allowed; bear short/bankrupt only in risk-off
                 if source in {"bear_short", "bear_bankrupt"} and signal_type == "SELL" and not risk_off:
+                    continue
+                    
+                # --- Fase 11: Regime ROSSO blocca tutti i LONG ---
+                if systemic_alert == "RED" and signal_type == "BUY" and not source.startswith("bear"):
+                    self.logger.debug(f"Systemic RED Alert override: Disabilitato BUY LONG signal for {sym}")
                     continue
 
                 # Multi-timeframe confirmation (1d + 4h trend alignment)
@@ -413,18 +702,94 @@ class RiskAgent(BaseAgent):
                 if not self._passes_correlation_gate(sym, selected_symbols, returns_map):
                     continue
 
-                # Volatility targeting + covariance penalty on size
+                # --- FASE 10: Position Sizing Avanzato (Kelly Criterion) ---
+                # p = probabilità di vincita storica (espressa dalla confidenza del ML o score)
+                p = meta_confidence if ('meta_confidence' in item and meta_confidence > 0) else score
+                # b = rapporto medio win/loss (se non fornito dalla stat storica, default = 1.5)
+                b = float(item.get("_avg_win_loss_ratio", 1.5))
+                # q = probabilità di perdita
+                q = 1.0 - p
+                
+                # Calcolo Criterio di Kelly Pieno: f* = (p * b - q) / b
+                if b > 0:
+                    kelly_f = (p * b - q) / b
+                else:
+                    kelly_f = 0.0
+                    
+                # Floor di sicurezza in caso di calcoli negativi
+                kelly_f = max(0.001, kelly_f)
+                
+                # Applicazione "Half-Kelly" per dimezzare la volatilità e l'incertezza
+                half_kelly = kelly_f * 0.5
+                
+                # Kelly Dinamico — ridotto: WR storico 30% richiede sizing conservativo
+                if not risk_off:
+                    dynamic_kelly = kelly_f * 0.30  # era 0.60
+                else:
+                    dynamic_kelly = kelly_f * 0.15  # era 0.30
+
+                # Role-based Kelly multiplier from institutional_knowledge.json
+                _ik_kelly_mult = _role_rules.get("kelly_multiplier", 1.0)
+                dynamic_kelly *= _ik_kelly_mult
+
+                # Computo Absolute USD size
+                stake_size = mode_equity * dynamic_kelly
+                
+                # (Optional multipliers) Modulatori base pre-esistenti: Size / Tier (Blue chips vs Altcoins)
                 vol_pct = self._estimate_volatility_pct(sym, mkt_data)
                 corr_penalty = self._correlation_penalty(sym, selected_symbols, returns_map)
-                sizing_mult = self._sizing_multiplier(score, vol_pct, corr_penalty)
-                # VIX-regime multiplier (ISSUE-003 — Beat-the-Market §4.1)
-                sizing_mult *= self._vix_size_multiplier(regime_vix)
-                # Stock-tier multiplier — blue chip gets larger size, small cap smaller
                 tier_size_mult = float(item.get("_tier_size_mult", 1.0))
-                sizing_mult *= tier_size_mult
-                stake_size = base_stake * sizing_mult
+                stake_size *= tier_size_mult
+                # --- ISSUE-003: VIX Vol-Targeting multiplier (Beat-the-Market §4.1) ---
+                vix_mult = self._vix_size_multiplier(regime_vix)
+                stake_size *= vix_mult
+                # --- ISSUE-003: Realized Vol 14d per-asset targeting ---
+                # Scale down position when asset vol is high relative to target (0.20 annualised)
+                realized_vol = item.get("realized_vol_14d") or item.get("_realized_vol_14d")
+                if realized_vol and realized_vol > 0:
+                    _target_annual_vol = float(self._risk_cfg.get("target_annual_vol", 0.20))
+                    rv_mult = min(1.5, max(0.25, _target_annual_vol / realized_vol))
+                    stake_size *= rv_mult
 
-                # Max exposure per asset (global) and per sub-bucket
+                # --- xStocks L2 Orderbook Imbalance multiplier ---
+                # Strong buy pressure (imbalance > 0.2) → up to 1.25× size
+                # Strong sell pressure (imbalance < -0.2) → block BUY signal
+                _imb = xstocks_imbalance.get(sym, None)
+                if _imb is not None and signal_type == "BUY":
+                    if _imb < -0.30:
+                        continue  # orderbook dominated by sellers — skip
+                    imb_mult = 1.0 + max(0.0, min(0.25, _imb))
+                    stake_size *= imb_mult
+
+                # --- Kraken Futures: Funding Rate filter (crypto only) ---
+                # OVERLONG funding on BTC/ETH → reduce size; EXTREME z-score → block
+                _sym_upper = sym.upper()
+                _fr = funding_rates.get(_sym_upper, {})
+                if _fr and signal_type == "BUY":
+                    if _fr.get("funding_signal") == "OVERLONG":
+                        stake_size *= 0.60  # reduce 40% when market overleveraged long
+                    _hf = hist_funding.get(_sym_upper, {})
+                    if _hf.get("extremity") == "EXTREME_LONG":
+                        continue  # funding z-score > 2σ → skip BUY, reversion likely
+
+                # --- Options PCR filter (crypto only) ---
+                # COMPLACENCY_TOP (PCR < 0.6) = calls dominate = frothy → reduce size
+                _pcr_data = options_pcr.get(_sym_upper, {})
+                if _pcr_data and signal_type == "BUY":
+                    if _pcr_data.get("signal") == "COMPLACENCY_TOP":
+                        stake_size *= 0.70
+                    elif _pcr_data.get("signal") == "CONTRARIAN_BULLISH":
+                        stake_size *= 1.15  # heavy put buying = fear = contrarian long
+
+                # --- BTC Exchange Netflow filter ---
+                # Heavy inflow (sell pressure) → reduce all crypto BUY size
+                if btc_netflow.get("signal") == "SELL_PRESSURE" and signal_type == "BUY":
+                    if _sym_upper in ("BTC", "ETH", "SOL", "BNB", "XRP"):
+                        stake_size *= 0.75
+
+                # --- Vincolo di Concentrazione Ferreo ---
+                # Max 5% per asset — hardcode sovrascrive config per sicurezza
+                self._max_asset_exposure_pct = 0.05
                 max_asset_abs = mode_equity * self._max_asset_exposure_pct
                 if signal_type == "BUY":
                     stake_size = min(stake_size, max_asset_abs)
@@ -440,8 +805,10 @@ class RiskAgent(BaseAgent):
                     continue
 
                 # Noise Area Dynamic Breakout Filter (ISSUE-002)
-                # Skip for bear/hedge signals — they have different logic
-                if not is_bear and not source.startswith("bear"):
+                # Disabled on daily candles (backtest) — designed for intraday breakouts.
+                # Enable via config: risk_agent.noise_gate_enabled = true
+                _noise_gate_on = bool(self.config.get("risk_agent", {}).get("noise_gate_enabled", False))
+                if _noise_gate_on and not is_bear and not source.startswith("bear"):
                     noise_bands = item.get("_noise_bands")
                     if not self._noise_area_check(sym, signal_type, price, noise_bands):
                         continue
@@ -458,11 +825,20 @@ class RiskAgent(BaseAgent):
                     # Fallback: ATR-based, modulated by stock tier
                     # BLUE_CHIP: sl=1.8×, tp=2.5× | LARGE_CAP: sl=1.5×, tp=2.2×
                     # SMALL_CAP: sl=1.2×, tp=1.8× — tighter because higher base vol
-                    tier_sl_mult = float(item.get("_tier_sl_mult", 1.5))
-                    tier_tp_mult = float(item.get("_tier_tp_mult", 2.2))
+                    # Widened SL/TP to give positions more room to breathe (was 1.5 / 2.2)
+                    tier_sl_mult = float(item.get("_tier_sl_mult", 2.5))
+                    tier_tp_mult = float(item.get("_tier_tp_mult", 3.5))
+                    # Crypto needs wider SL — high volatility stops out too early
+                    if sub_name == "crypto":
+                        tier_sl_mult = max(tier_sl_mult, 4.0)
+                        tier_tp_mult = max(tier_tp_mult, 6.0)
                     atr_daily = vol_pct * price
                     atr_daily = max(atr_daily, price * 0.005)
                     sl_dist = tier_sl_mult * atr_daily
+                    # Role-based SL cap from institutional_knowledge.json
+                    _sl_cap_pct = _role_cfg.get("sl_cap_pct")
+                    if _sl_cap_pct:
+                        sl_dist = min(sl_dist, price * _sl_cap_pct)
                     tp_dist = tier_tp_mult * atr_daily
                     if signal_type == "BUY":
                         sl = price - sl_dist
@@ -493,6 +869,7 @@ class RiskAgent(BaseAgent):
                     "max_corr_with_portfolio": max_corr,
                     "vol_20d_annualized": vol_20d_ann,
                     "regime_at_validation": regime_label,
+                    "meta_confidence": round(item.get("meta_confidence", 0.5), 2),
                     "agent_source": source,
                     "strategy_bucket": (
                         "crypto"
@@ -514,12 +891,120 @@ class RiskAgent(BaseAgent):
         process_candidates(crypto, "crypto", max_picks=5, is_bear=False)
         process_candidates(bull, "bull", max_picks=4, is_bear=False)
         process_candidates(bear, "bear", max_picks=5, is_bear=True)
-        # TA signals: use "crypto" sub-portfolio capital for crypto symbols,
-        # capped at 3 additional picks so they don't crowd out specialist strategies
         if ta:
             process_candidates(ta, "crypto", max_picks=3, is_bear=False)
 
+        # ── Beta Hedge (automatic portfolio neutralization) ──────────────
+        # If portfolio beta vs SPY > threshold in RISK_OFF → inject SH or SPXS hedge
+        _beta_hedge_cfg = self.config.get("risk_agent", {}).get("beta_hedge", {})
+        _beta_hedge_enabled = bool(_beta_hedge_cfg.get("enabled", True))
+        if _beta_hedge_enabled and risk_off and validated:
+            _beta_threshold = float(_beta_hedge_cfg.get("beta_threshold", 0.70))
+            _hedge_ratio    = float(_beta_hedge_cfg.get("hedge_ratio", 0.50))
+            _leverage       = float(_beta_hedge_cfg.get("leverage", 1.0))
+
+            # Dynamic instrument selection via institutional_knowledge.json
+            # Prefer inverse_equity, then bond_duration, then safe_haven (all preferred_for_beta_hedge)
+            _role_priority = {"inverse_equity": 0, "bond_duration": 1, "safe_haven": 2}
+            _assets_mkt = mkt_data.get("assets", {})
+            _candidates = [
+                sym for sym, role in self._ik.get("assets", {}).items()
+                if self._ik.get("roles", {}).get(role, {}).get("preferred_for_beta_hedge", False)
+                and sym not in validated
+                and float(_assets_mkt.get(sym, {}).get("last_price", 0) or 0) > 0
+            ]
+            _candidates.sort(key=lambda s: _role_priority.get(self.get_asset_role(s), 99))
+            _hedge_sym = _candidates[0] if _candidates else _beta_hedge_cfg.get("instrument", "SH")
+
+            portfolio_beta = self._compute_portfolio_beta(validated, returns_map, mkt_data)
+
+            if portfolio_beta > _beta_threshold and _hedge_sym not in validated:
+                # Hedge notional = (beta - target_beta) * equity * hedge_ratio / leverage
+                _target_beta = float(_beta_hedge_cfg.get("target_beta", 0.0))
+                hedge_notional = (portfolio_beta - _target_beta) * mode_equity * _hedge_ratio / max(_leverage, 1.0)
+                hedge_notional = min(hedge_notional, mode_equity * 0.10)  # cap 10% equity
+                hedge_price = mkt_data.get("assets", {}).get(_hedge_sym, {}).get("last_price", 0.0)
+                if not hedge_price:
+                    hedge_price = float((self.read_json(DATA_DIR / "market_data.json") or {})
+                                       .get("assets", {}).get(_hedge_sym, {}).get("last_price", 0.0))
+                if hedge_price and hedge_price > 0 and hedge_notional >= 10.0:
+                    hedge_qty = round(hedge_notional / hedge_price, 6)
+                    validated[_hedge_sym] = {
+                        "approved": True,
+                        "signal_type": "BUY",
+                        "score": 0.80,
+                        "entry_price": round(hedge_price, 4),
+                        "stop_loss_price": round(hedge_price * 0.92, 4),
+                        "stop_loss_pct": 0.08,
+                        "take_profit_price": round(hedge_price * 1.15, 4),
+                        "position_size_usdt": round(hedge_notional, 4),
+                        "position_size_pct": round(hedge_notional / mode_equity, 6),
+                        "quantity": hedge_qty,
+                        "rejection_reason": None,
+                        "agent_source": "beta_hedge",
+                        "strategy_bucket": "bear",
+                        "volatility_pct": 0.02,
+                        "atr": round(hedge_price * 0.015, 4),
+                        "corr_penalty": 0.0,
+                        "max_corr_with_portfolio": 0.0,
+                        "vol_20d_annualized": 0.30,
+                        "regime_at_validation": regime_label,
+                        "meta_confidence": 0.75,
+                        "vwap": None,
+                        "noise_upper_band": None,
+                        "noise_lower_band": None,
+                        "_beta_hedge": True,
+                        "_portfolio_beta": round(portfolio_beta, 3),
+                    }
+                    self.logger.info(
+                        f"Beta hedge injected: {_hedge_sym} β={portfolio_beta:.2f} > {_beta_threshold} "
+                        f"notional=${hedge_notional:,.0f} qty={hedge_qty}"
+                    )
+
         return validated
+
+    def _compute_portfolio_beta(self, validated: dict, returns_map: dict, mkt_data: dict) -> float:
+        """Calcola beta weighted del portafoglio vs SPY returns."""
+        spy_rets = returns_map.get("SPY") or returns_map.get("SPYUSDT")
+        if not spy_rets or len(spy_rets) < 20:
+            return 1.0  # assume beta=1 se SPY non disponibile
+
+        total_notional = sum(
+            float(v.get("position_size_usdt", 0))
+            for v in validated.values()
+            if v.get("signal_type") == "BUY"
+        )
+        if total_notional <= 0:
+            return 0.0
+
+        weighted_beta = 0.0
+        for sym, v in validated.items():
+            if v.get("signal_type") != "BUY":
+                continue
+            notional = float(v.get("position_size_usdt", 0))
+            weight = notional / total_notional
+            sym_rets = returns_map.get(sym)
+            if not sym_rets or len(sym_rets) < 20:
+                beta = 1.0  # default per simboli senza dati
+            else:
+                beta = self._beta(sym_rets, spy_rets)
+            weighted_beta += weight * beta
+
+        return round(weighted_beta, 3)
+
+    @staticmethod
+    def _beta(asset_rets: list[float], market_rets: list[float]) -> float:
+        """Beta = Cov(asset, market) / Var(market)."""
+        n = min(len(asset_rets), len(market_rets))
+        if n < 10:
+            return 1.0
+        a = asset_rets[-n:]
+        m = market_rets[-n:]
+        ma = sum(a) / n
+        mm = sum(m) / n
+        cov = sum((a[i] - ma) * (m[i] - mm) for i in range(n)) / max(n - 1, 1)
+        var_m = sum((m[i] - mm) ** 2 for i in range(n)) / max(n - 1, 1)
+        return round(cov / var_m, 3) if var_m > 0 else 1.0
 
     def _strategy_weight_multiplier(self, sub_name: str, portfolio: dict) -> float:
         trades = portfolio.get("trades", []) or []
@@ -680,38 +1165,48 @@ class RiskAgent(BaseAgent):
             corr_mult = 1.0 - min(0.45, corr_penalty * self._covariance_penalty * 0.5)
         return max(0.35, min(1.6, score_mult * vol_mult * corr_mult))
 
-    def _build_ml_boost_map(self, ml_signals: dict) -> dict[str, float]:
+    def _build_ml_boost_map(self, ml_signals: dict) -> dict[str, dict]:
         """
-        Builds a symbol → score_delta map from the latest ML ranking.
+        Builds a symbol → {"delta": float, "meta_confidence": float} map from the latest ML ranking.
         Top-decile longs get a positive boost, bottom-decile shorts get a negative boost.
         Boost is capped at score_boost_cap (default 0.12) from config.
         """
         cap = float(self.config.get("ml_strategy", {}).get("score_boost_cap", 0.12))
         ranking = ml_signals.get("latest_ranking") or {}
-        boost: dict[str, float] = {}
+        boost: dict[str, dict] = {}
 
         for entry in ranking.get("top_decile_long", []):
             sym = entry.get("symbol")
             pred = float(entry.get("predicted_excess_return", 0.0))
+            conf = float(entry.get("meta_confidence", 0.5))
             if sym:
-                boost[sym] = min(cap, max(0.0, pred * 2.0))
+                boost[sym] = {"delta": min(cap, max(0.0, pred * 2.0)), "meta_confidence": conf}
 
         for entry in ranking.get("bottom_decile_short", []):
             sym = entry.get("symbol")
             pred = float(entry.get("predicted_excess_return", 0.0))
+            conf = float(entry.get("meta_confidence", 0.5))
             if sym:
-                boost[sym] = max(-cap, min(0.0, pred * 2.0))
+                boost[sym] = {"delta": max(-cap, min(0.0, pred * 2.0)), "meta_confidence": conf}
 
         return boost
 
     @staticmethod
-    def _apply_ml_boost(signals: list[dict], boost_map: dict[str, float]) -> None:
-        """Adds ML predicted excess return as a score adjustment (in-place)."""
+    def _apply_ml_boost(signals: list[dict], boost_map: dict[str, dict]) -> None:
+        """Adds ML predicted excess return as a score adjustment (in-place) and attaches meta-confidence."""
         for item in signals:
             sym = item.get("symbol")
             if not sym or sym not in boost_map:
                 continue
-            delta = boost_map[sym]
+            bdata = boost_map[sym]
+            
+            # Formato compatibile sia col nuovo formato a dizionario, sia col vecchio float (News/Sector)
+            if isinstance(bdata, dict):
+                delta = bdata.get("delta", 0.0)
+                item["meta_confidence"] = bdata.get("meta_confidence", 0.5)
+            else:
+                delta = float(bdata)
+                
             current = float(item.get("composite_score", 0.5) or 0.5)
             item["composite_score"] = round(min(1.0, max(0.0, current + delta)), 4)
             item["ml_boost"] = round(delta, 4)
