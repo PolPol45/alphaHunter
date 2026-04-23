@@ -1,0 +1,26 @@
+{
+  "_doc": "Edit this file during a live backtest run to change parameters mid-run. Reloaded every cycle automatically.",
+  "_fields": {
+    "bucket_weights":         "Multiplier per strategy bucket: bull/bear/crypto (0.5-2.0). Higher = more capital allocated.",
+    "min_score_by_tier":      "Override min composite score floor per stock tier: BLUE_CHIP/LARGE_CAP/SMALL_CAP/SPECULATIVE_MOMENTUM.",
+    "min_score_override":     "Override min score at bucket level: {bull: 0.60} raises entry bar for all bull stocks.",
+    "max_drawdown_halt":      "Halt new trades if portfolio drawdown exceeds this fraction (e.g. 0.12 = 12%).",
+    "target_vol_daily":       "Target daily portfolio volatility (e.g. 0.02 = 2%). Lower = smaller positions.",
+    "max_asset_exposure_pct": "Max fraction of equity in a single asset (e.g. 0.08 = 8%)."
+  },
+  "bucket_weights": {
+    "bull": 1.0,
+    "bear": 1.0,
+    "crypto": 1.0
+  },
+  "min_score_by_tier": {
+    "BLUE_CHIP": 0.68,
+    "LARGE_CAP": 0.73,
+    "SMALL_CAP": 0.78,
+    "SPECULATIVE_MOMENTUM": 0.82
+  },
+  "min_score_override": {},
+  "max_drawdown_halt": 0.15,
+  "target_vol_daily": 0.02,
+  "max_asset_exposure_pct": 0.08
+}
