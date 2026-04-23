@@ -14,6 +14,7 @@ from adapters.historical_data_store import HistoricalDataStore, fetch_real_snaps
 
 # Separate directory for backtest working files — never touches live DATA_DIR files
 BT_RUN_DIR = BASE_DIR / "data" / "bt_run"
+OVERRIDES_PATH = DATA_DIR / "backtest_overrides.json"
 from backtesting.backtest_metrics import (
     calmar_ratio,
     max_drawdown,
@@ -41,6 +42,8 @@ class BacktestingAgent(BaseAgent):
         self._execution = ExecutionAgent()
         self._ta = TechnicalAnalysisAgent()
         self._ta._timeout = float("inf")  # backtest data is always "stale" by design
+        self._overrides: dict = {}
+        self._overrides_mtime: float = 0.0
 
     def run(self) -> bool:
         self.mark_running()
@@ -104,6 +107,7 @@ class BacktestingAgent(BaseAgent):
             try:
                 while day <= end:
                     steps += 1
+                    self._load_overrides()
                     self._set_backtest_context(day, universe)
 
                     market = self._store.get_snapshot_at(day, universe)
@@ -143,6 +147,29 @@ class BacktestingAgent(BaseAgent):
                     self.write_json(DATA_DIR / "bull_signals.json", bull)
                     self.write_json(DATA_DIR / "bear_signals.json", bear)
                     self.write_json(DATA_DIR / "crypto_signals.json", crypto)
+
+                    # Apply hot overrides to adaptive_params so RiskAgent reads them
+                    if self._overrides:
+                        ap_path = DATA_DIR / "adaptive_params.json"
+                        try:
+                            ap = json.loads(ap_path.read_text()) if ap_path.exists() else {}
+                            changed = False
+                            if "bucket_weights" in self._overrides:
+                                ap.setdefault("strategy_weights", {}).update(self._overrides["bucket_weights"])
+                                changed = True
+                            if "max_drawdown_halt" in self._overrides:
+                                ap["max_drawdown_pct"] = float(self._overrides["max_drawdown_halt"])
+                                changed = True
+                            if "target_vol_daily" in self._overrides:
+                                ap["target_vol_daily"] = float(self._overrides["target_vol_daily"])
+                                changed = True
+                            if "max_asset_exposure_pct" in self._overrides:
+                                ap["max_asset_exposure_pct"] = float(self._overrides["max_asset_exposure_pct"])
+                                changed = True
+                            if changed:
+                                ap_path.write_text(json.dumps(ap, indent=2))
+                        except Exception as exc:
+                            self.logger.warning(f"Failed to apply overrides to adaptive_params: {exc}")
 
                     if not self._risk.run():
                         raise RuntimeError(f"RiskAgent failed at {day}")
@@ -189,6 +216,18 @@ class BacktestingAgent(BaseAgent):
             self._clear_backtest_context()
             self.mark_error(exc)
             return False
+
+    def _load_overrides(self) -> None:
+        """Reload backtest_overrides.json if it changed since last check."""
+        try:
+            mtime = OVERRIDES_PATH.stat().st_mtime if OVERRIDES_PATH.exists() else 0.0
+            if mtime != self._overrides_mtime:
+                self._overrides = json.loads(OVERRIDES_PATH.read_text()) if OVERRIDES_PATH.exists() else {}
+                self._overrides_mtime = mtime
+                if self._overrides:
+                    self.logger.info(f"backtest_overrides reloaded: {list(self._overrides.keys())}")
+        except Exception as exc:
+            self.logger.warning(f"Failed to load backtest_overrides.json: {exc}")
 
     def _freeze_universe(self) -> list[str]:
         requested = self._cfg.get("universe_snapshot") or self.config.get("scanner", {}).get("crypto_universe", [])
@@ -399,6 +438,17 @@ class BacktestingAgent(BaseAgent):
                 tier = "SPECULATIVE_MOMENTUM"
                 tier_rules = self._TIER_RULES["SPECULATIVE_MOMENTUM"]
                 min_score, size_mult, sl_mult, tp_mult = tier_rules
+
+            # Apply hot override for min_score if set
+            ov_scores = self._overrides.get("min_score_by_tier", {})
+            if tier in ov_scores:
+                min_score = float(ov_scores[tier])
+            # Apply global min_score_override (bucket-level from adaptive params)
+            ov_bucket_scores = self._overrides.get("min_score_override", {})
+            if "bull" in ov_bucket_scores:
+                # bull bucket maps to stock score floors — apply as global floor
+                global_floor = float(ov_bucket_scores["bull"])
+                min_score = max(min_score, global_floor)
 
             # Enforce per-tier score floor
             if composite < min_score:
@@ -790,3 +840,4 @@ class BacktestingAgent(BaseAgent):
     @staticmethod
     def _iso(day: date) -> str:
         return datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc).isoformat()
+
