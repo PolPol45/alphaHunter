@@ -1,0 +1,97 @@
+{
+  "promoted_at": "2026-04-23T16:19:46.769273+00:00",
+  "source_report": "reports/backtest_report_2025-04-01_2026-04-18.json",
+  "base_mode": "defaults",
+  "weight_alpha": 0.5,
+  "report_metrics": {
+    "sharpe": -1.289693,
+    "sortino": -1.766586,
+    "max_drawdown": 0.248365,
+    "calmar": -0.65595,
+    "win_rate": 0.656863,
+    "turnover": 35.326458
+  },
+  "strategy_breakdown": {
+    "bull": {
+      "trades": 593,
+      "closed_trades": 287,
+      "realized_pnl": -21697.9032,
+      "win_rate": 0.682927,
+      "turnover": 23.040949
+    },
+    "bear": {
+      "trades": 42,
+      "closed_trades": 21,
+      "realized_pnl": -5325.1042,
+      "win_rate": 0.52381,
+      "turnover": 1.028004
+    },
+    "crypto": {
+      "trades": 205,
+      "closed_trades": 100,
+      "realized_pnl": -169959.4796,
+      "win_rate": 0.61,
+      "turnover": 11.257505
+    },
+    "unknown": {
+      "trades": 0,
+      "closed_trades": 0,
+      "realized_pnl": 0,
+      "win_rate": 0.0,
+      "turnover": 0.0
+    }
+  },
+  "candidate_weights": {
+    "bull": 1.0003,
+    "bear": 1.0862,
+    "crypto": 0.9135
+  },
+  "learned_before": {
+    "bull": 0.9858,
+    "bear": 1.0396,
+    "crypto": 0.9015,
+    "ml": 1.0732
+  },
+  "learned_after": {
+    "bull": 0.993,
+    "bear": 1.0629,
+    "crypto": 0.9075,
+    "ml": 1.0732
+  },
+  "adaptive_before": {
+    "min_score_by_bucket": {
+      "crypto": 0.58,
+      "bull": 0.62,
+      "bear_hedge": 0.55,
+      "bear_short": 0.68,
+      "bear_bankrupt": 0.66
+    },
+    "strategy_weights": {
+      "bull": 1.0,
+      "bear": 1.0,
+      "crypto": 1.0
+    },
+    "target_vol_daily": 0.02,
+    "max_asset_exposure_pct": 0.08,
+    "correlation_threshold": 0.75,
+    "covariance_penalty": 0.35
+  },
+  "adaptive_after": {
+    "min_score_by_bucket": {
+      "crypto": 0.61,
+      "bull": 0.65,
+      "bear_hedge": 0.56,
+      "bear_short": 0.7,
+      "bear_bankrupt": 0.68
+    },
+    "strategy_weights": {
+      "bull": 0.9965,
+      "bear": 1.0314,
+      "crypto": 0.9537
+    },
+    "target_vol_daily": 0.017,
+    "max_asset_exposure_pct": 0.07,
+    "correlation_threshold": 0.71,
+    "covariance_penalty": 0.42
+  }
+}
