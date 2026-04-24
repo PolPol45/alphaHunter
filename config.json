@@ -112,7 +112,7 @@
     }
   },
   "retail": {
-    "enabled": true,
+    "enabled": false,
     "capital": 20000.0,
     "max_open_trades": 3,
     "allow_short": true,
@@ -135,7 +135,7 @@
     "slippage_pct": 0.0005
   },
   "institutional": {
-    "capital": 980000.0,
+    "capital": 1000000.0,
     "max_open_trades": 3,
     "allow_short": true,
     "cash_reserve_pct": 0.15,
@@ -1530,6 +1530,7 @@
     "enabled": true,
     "start_date": "2025-04-01",
     "end_date": "2026-04-18",
+    "report_tag": "alpha1",
     "fees": {
       "commission_pct": 0.001
     },

@@ -526,6 +526,19 @@ class TechnicalAnalysisAgent(BaseAgent):
         stock_filter_applied = (
             stock_composite_score is not None and stock_composite_score < 0.60
         )
+
+        # Crypto strict temporal confirmation: require persistent trend + ADX strength.
+        asset_role = self.get_asset_role(symbol)
+        is_crypto_asset = asset_role in {"crypto_native", "crypto_proxy"} or symbol.upper().endswith("USDT")
+        crypto_temporal_confirm = bool(
+            curr["ema_fast"] > curr["ema_slow"]
+            and prev["ema_fast"] > prev["ema_slow"]
+            and adx >= 25.0
+        )
+        if signal_type == "BUY" and is_crypto_asset and not crypto_temporal_confirm:
+            signal_type = "HOLD"
+            score = round(buy_score, 4)
+
         if signal_type == "BUY" and stock_filter_applied:
             signal_type = "HOLD"
             score = round(buy_score, 4)

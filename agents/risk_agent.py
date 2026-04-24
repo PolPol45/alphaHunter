@@ -573,6 +573,29 @@ class RiskAgent(BaseAgent):
         selected_symbols = []
         sub_exposure = {"crypto": 0.0, "bull": 0.0, "bear": 0.0}
 
+        # Crypto bucket drawdown guard: if bucket DD exceeds threshold, block new crypto BUYs.
+        crypto_trades = [t for t in portfolio.get("trades", []) if str(t.get("strategy_bucket", "")).lower() == "crypto"]
+        c_real = sum(float(t.get("realized_pnl", 0.0) or 0.0) for t in crypto_trades)
+        c_pos = [p for p in portfolio.get("positions", {}).values() if str(p.get("strategy_bucket", "")).lower() == "crypto"]
+        c_unreal = sum(float(p.get("unrealized_pnl", 0.0) or 0.0) for p in c_pos)
+        crypto_cap = float(config.get("sub", {}).get("crypto", {}).get("capital", 0.0) or 0.0)
+        crypto_eq = crypto_cap + c_real + c_unreal
+        c_peak = crypto_cap
+        c_run = crypto_cap
+        for t in crypto_trades:
+            c_run += float(t.get("realized_pnl", 0.0) or 0.0)
+            if c_run > c_peak:
+                c_peak = c_run
+        if crypto_eq > c_peak:
+            c_peak = crypto_eq
+        crypto_dd = (c_peak - crypto_eq) / c_peak if c_peak > 0 else 0.0
+        crypto_dd_limit = float(self._risk_cfg.get("crypto_bucket_drawdown_halt_pct", 0.10))
+        crypto_dd_halt = crypto_dd >= crypto_dd_limit
+        if crypto_dd_halt:
+            self.logger.warning(
+                f"Crypto DD guard active: DD={crypto_dd*100:.1f}% >= {crypto_dd_limit*100:.0f}% | blocking crypto BUYs"
+            )
+
         # Helper inner function to process a list of candidates
         def process_candidates(candidates, sub_name, max_picks=3, is_bear=False):
             # Se siamo in emergenza rossa, riduciamo chirurgicamente da 30-40 posizioni totali a ~10 massimo
@@ -682,6 +705,10 @@ class RiskAgent(BaseAgent):
                     if market_bias < -0.15 or market_vol_extreme:
                         continue
                 if signal_type == "BUY" and source == "crypto":
+                    if crypto_dd_halt:
+                        continue
+                    if risk_off or regime_label in ("BEAR", "RISK_OFF", "HIGH_VOLATILITY"):
+                        continue
                     if market_bias < -0.25 or market_vol_extreme:
                         continue
 
@@ -788,9 +815,10 @@ class RiskAgent(BaseAgent):
                         stake_size *= 0.75
 
                 # --- Vincolo di Concentrazione Ferreo ---
-                # Max 5% per asset — hardcode sovrascrive config per sicurezza
-                self._max_asset_exposure_pct = 0.05
-                max_asset_abs = mode_equity * self._max_asset_exposure_pct
+                # Max 4% per crypto asset, default cap for all other buckets.
+                base_exposure_pct = float(self._max_asset_exposure_pct)
+                current_exposure_pct = min(base_exposure_pct, 0.04) if (sub_name == "crypto" or source == "crypto") else base_exposure_pct
+                max_asset_abs = mode_equity * current_exposure_pct
                 if signal_type == "BUY":
                     stake_size = min(stake_size, max_asset_abs)
                 sub_cap_limit = cap * self._max_sub_exposure_pct
@@ -828,10 +856,10 @@ class RiskAgent(BaseAgent):
                     # Widened SL/TP to give positions more room to breathe (was 1.5 / 2.2)
                     tier_sl_mult = float(item.get("_tier_sl_mult", 2.5))
                     tier_tp_mult = float(item.get("_tier_tp_mult", 3.5))
-                    # Crypto needs wider SL — high volatility stops out too early
+                    # Crypto micro-stop profile: tighter SL and lower TP distance.
                     if sub_name == "crypto":
-                        tier_sl_mult = max(tier_sl_mult, 4.0)
-                        tier_tp_mult = max(tier_tp_mult, 6.0)
+                        tier_sl_mult = 1.5
+                        tier_tp_mult = 3.0
                     atr_daily = vol_pct * price
                     atr_daily = max(atr_daily, price * 0.005)
                     sl_dist = tier_sl_mult * atr_daily

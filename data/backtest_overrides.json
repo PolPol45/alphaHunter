@@ -20,7 +20,7 @@
     "SPECULATIVE_MOMENTUM": 0.82
   },
   "min_score_override": {},
-  "max_drawdown_halt": 0.15,
+  "max_drawdown_halt": 0.1,
   "target_vol_daily": 0.02,
-  "max_asset_exposure_pct": 0.08
+  "max_asset_exposure_pct": 0.04
 }

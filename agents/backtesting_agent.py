@@ -204,7 +204,11 @@ class BacktestingAgent(BaseAgent):
                         p.unlink(missing_ok=True)
 
             report = self._build_report(start, end, universe, equity_curve, equity_dates, returns)
-            report_path = REPORTS_DIR / f"backtest_report_{start.isoformat()}_{end.isoformat()}.json"
+            report_tag = str(self._cfg.get("report_tag", "")).strip()
+            if report_tag:
+                report_path = REPORTS_DIR / f"backtest_report_{report_tag}_{start.isoformat()}_{end.isoformat()}.json"
+            else:
+                report_path = REPORTS_DIR / f"backtest_report_{start.isoformat()}_{end.isoformat()}.json"
             self.write_json(report_path, report)
             self.logger.info(f"Backtest completed | steps={steps} | report={report_path.name}")
 
