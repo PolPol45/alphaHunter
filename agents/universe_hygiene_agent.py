@@ -31,6 +31,12 @@ class UniverseHygieneAgent(BaseAgent):
                 self.mark_done()
                 return True
 
+            bt_ctx = self.read_json(DATA_DIR / "backtest_context.json") or {}
+            if bt_ctx.get("enabled"):
+                self.logger.info("Universe hygiene skipped in backtest mode")
+                self.mark_done()
+                return True
+
             symbols, candidate_origin = self._collect_symbols()
             symbol_rows: list[dict] = []
             valid_symbols: list[str] = []

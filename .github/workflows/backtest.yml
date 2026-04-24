@@ -127,10 +127,16 @@ jobs:
           set -euo pipefail
           REPORT=$(ls reports/backtest_report_*.json 2>/dev/null | head -1)
           if [ -z "$REPORT" ]; then echo "No report to publish."; exit 0; fi
+          TMP_REPORT=$(mktemp)
+          cp "$REPORT" "$TMP_REPORT"
 
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # The workflow mutates config.json to set the backtest window. We only
+          # need the generated report for publishing, so reset tracked changes
+          # before switching branches.
+          git restore config.json
           git fetch origin "${TARGET_BRANCH}" 2>/dev/null || true
 
           if git show-ref --verify --quiet "refs/remotes/origin/${TARGET_BRANCH}"; then
@@ -144,7 +150,7 @@ jobs:
           fi
 
           mkdir -p reports
-          cp reports/backtest_report_*.json reports/ 2>/dev/null || true
+          cp "$TMP_REPORT" "reports/$(basename "$REPORT")"
 
           git add reports/
           if git diff --cached --quiet; then echo "No changes."; exit 0; fi

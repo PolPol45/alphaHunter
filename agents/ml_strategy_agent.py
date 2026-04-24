@@ -59,10 +59,7 @@ class MLStrategyAgent(BaseAgent):
                 dataset_path=dataset_path,
                 signals_path=signals_path,
                 summary_path=summary_path,
-                config={
-                    "runtime_mode": self._cfg.get("runtime_mode", "long_short_parallel"),
-                    "split": self._cfg.get("split", {}),
-                },
+                config=dict(self._cfg),
             )
             summary = pipeline.run()
 

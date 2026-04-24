@@ -59,8 +59,56 @@ class NewsDataAgent(BaseAgent):
         self.mark_running()
         try:
             market_doc = self.read_json(DATA_DIR / "market_data.json")
+            bt_ctx = self.read_json(DATA_DIR / "backtest_context.json") or {}
             world_events = market_doc.get("world_events", [])
             generated_at = datetime.now(timezone.utc).isoformat()
+
+            if bt_ctx.get("enabled"):
+                fallback_items = self._fallback_world_events(world_events, generated_at)
+                macro_snapshot = self.read_json(DATA_DIR / "macro_snapshot.json") or {
+                    "generated_at": generated_at,
+                    "series": {},
+                    "risk_flags": [],
+                    "market_bias": 0.0,
+                    "source_status": {"mode": "backtest_stub", "computed_at": generated_at},
+                }
+                insider_doc = {
+                    "generated_at": generated_at,
+                    "clusters": [],
+                    "recent_filings": [],
+                    "source_status": {
+                        "connected": False,
+                        "reachable": False,
+                        "state": "backtest_stub",
+                        "clusters": 0,
+                        "filings": 0,
+                        "last_error": None,
+                        "last_success_at": None,
+                    },
+                }
+                news_feed = {
+                    "generated_at": generated_at,
+                    "items": fallback_items[: self._max_items],
+                    "top_alerts": [item for item in fallback_items if item["alert_type"] != "INFO"][: self._top_alerts],
+                    "source_status": {
+                        "backtest_mode": True,
+                        "live_sources": {"available": [], "failed": [], "mode": "backtest_stub"},
+                    },
+                }
+                self.write_json(DATA_DIR / "news_feed.json", news_feed)
+                self.write_json(DATA_DIR / "macro_snapshot.json", macro_snapshot)
+                self.write_json(DATA_DIR / "insider_activity.json", insider_doc)
+                self.update_shared_state("data_freshness.news_feed", generated_at)
+                self.update_shared_state("data_freshness.macro_snapshot", generated_at)
+                self.update_shared_state("data_freshness.insider_activity", generated_at)
+                self.logger.info(
+                    "News feed backtest stub | items=%s alerts=%s macro_flags=%s",
+                    len(news_feed["items"]),
+                    len(news_feed["top_alerts"]),
+                    len(macro_snapshot.get("risk_flags", [])),
+                )
+                self.mark_done()
+                return True
 
             finnhub_items, finnhub_status = self._collect_finnhub_items()
             yfinance_items, yfinance_status = self._collect_yfinance_items()

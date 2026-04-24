@@ -49,15 +49,19 @@ class FeatureStoreAgent(BaseAgent):
                 macro_doc = self.read_json(DATA_DIR / "market_regime.json") or {}
             macro_features = self._macro_features(macro_doc)
 
+            bt_ctx = self.read_json(DATA_DIR / "backtest_context.json") or {}
+            backtest_mode = bool(bt_ctx.get("enabled"))
+            market_doc = self.read_json(DATA_DIR / "market_data.json") if backtest_mode else {}
+
             # --- Fase 1 & 5: Alternative Data + NLP Sentiment ---
-            alt_features = self._fetch_alternative_data()
-            sentiment_features = self._fetch_sentiment_features()
+            alt_features = self._fetch_alternative_data(backtest_mode=backtest_mode)
+            sentiment_features = self._fetch_sentiment_features(backtest_mode=backtest_mode)
 
             rows: list[dict] = []
-            as_of = datetime.now(timezone.utc).date().isoformat()
+            as_of = self._resolve_as_of_date(bt_ctx)
 
             for symbol in symbols:
-                history = self._fetch_history(symbol)
+                history = self._fetch_history(symbol, market_doc if backtest_mode else None)
                 if history is None or history.empty or "Close" not in history.columns:
                     continue
                 base = self._market_features(history)
@@ -66,7 +70,7 @@ class FeatureStoreAgent(BaseAgent):
 
                 score_row = score_map.get(symbol, {})
                 seasonality = self._seasonality_features(as_of)
-                short_interest = self._fetch_short_interest(symbol)
+                short_interest = self._fetch_short_interest(symbol, backtest_mode=backtest_mode)
                 # Sentiment per-ticker: cerca la feature specifica per questo simbolo
                 ticker_key = symbol.replace("-USD", "").replace("USDT", "")
                 ticker_sentiment = sentiment_features.get(f"sentiment_{ticker_key}", None)
@@ -117,7 +121,42 @@ class FeatureStoreAgent(BaseAgent):
             self.mark_error(exc)
             return False
 
-    def _fetch_history(self, symbol: str) -> pd.DataFrame | None:
+    @staticmethod
+    def _resolve_as_of_date(bt_ctx: dict) -> str:
+        simulated = bt_ctx.get("simulated_now")
+        if simulated:
+            try:
+                return datetime.fromisoformat(simulated).date().isoformat()
+            except Exception:
+                pass
+        return datetime.now(timezone.utc).date().isoformat()
+
+    @staticmethod
+    def _history_from_market_doc(symbol: str, market_doc: dict) -> pd.DataFrame | None:
+        try:
+            asset = (market_doc or {}).get("assets", {}).get(symbol, {})
+            candles = asset.get("ohlcv_1d") or []
+            if not candles:
+                return None
+            df = pd.DataFrame(candles)
+            if df.empty or "c" not in df.columns:
+                return None
+            rename_map = {"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume", "t": "Date"}
+            df = df.rename(columns=rename_map)
+            if "Date" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"], unit="s", utc=True, errors="coerce")
+                df = df.dropna(subset=["Date"]).set_index("Date")
+            keep = [c for c in ["Open", "High", "Low", "Close", "Volume"] if c in df.columns]
+            df = df[keep].sort_index()
+            return df if not df.empty else None
+        except Exception:
+            return None
+
+    def _fetch_history(self, symbol: str, market_doc: dict | None = None) -> pd.DataFrame | None:
+        if market_doc:
+            hist = self._history_from_market_doc(symbol, market_doc)
+            if hist is not None:
+                return hist
         try:
             return yf.Ticker(symbol).history(period=self._lookback_period, interval="1d", auto_adjust=True)
         except Exception as exc:
@@ -267,9 +306,11 @@ class FeatureStoreAgent(BaseAgent):
         }
 
     @staticmethod
-    def _fetch_short_interest(symbol: str) -> dict:
+    def _fetch_short_interest(symbol: str, backtest_mode: bool = False) -> dict:
         """Fetch short interest ratio as a sentiment/contrarian signal.
         High short interest = strong negative sentiment (potential squeeze or continuation)."""
+        if backtest_mode:
+            return {"short_ratio": None, "short_pct_float": None}
         try:
             info = yf.Ticker(symbol).info
             si_ratio = info.get("shortRatio")  # Days to cover
@@ -281,8 +322,10 @@ class FeatureStoreAgent(BaseAgent):
         except Exception:
             return {"short_ratio": None, "short_pct_float": None}
 
-    def _fetch_alternative_data(self) -> dict:
+    def _fetch_alternative_data(self, backtest_mode: bool = False) -> dict:
         """Fase 1: Raccoglie Fear & Greed + Kraken L2 Imbalance in un unico dict."""
+        if backtest_mode:
+            return {"fear_greed_value": None, "fear_greed_class": None, "btc_bid_ask_imbalance": None}
         try:
             alt_agent = AlternativeDataAgent()
             result = {}
@@ -310,8 +353,10 @@ class FeatureStoreAgent(BaseAgent):
             self.logger.warning("Alternative data fetch failed: %s", exc)
             return {"fear_greed_value": None, "fear_greed_class": None, "btc_bid_ask_imbalance": None}
 
-    def _fetch_sentiment_features(self) -> dict:
+    def _fetch_sentiment_features(self, backtest_mode: bool = False) -> dict:
         """Fase 5: Raccoglie il vettore di sentiment NLP da feed RSS."""
+        if backtest_mode:
+            return {"sentiment_market": None}
         try:
             sent_agent = SentimentAnalyzerAgent()
             features = sent_agent.get_feature_vector(max_age_hours=48)

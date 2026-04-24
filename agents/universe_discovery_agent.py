@@ -24,6 +24,12 @@ class UniverseDiscoveryAgent(BaseAgent):
                 self.mark_done()
                 return True
 
+            bt_ctx = self.read_json(DATA_DIR / "backtest_context.json") or {}
+            if bt_ctx.get("enabled"):
+                self.logger.info("Universe discovery skipped in backtest mode")
+                self.mark_done()
+                return True
+
             seeds = self._seed_symbols()
             candidates = []
             for symbol in seeds:
