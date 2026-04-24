@@ -24,3 +24,4 @@ telethon>=1.36.0
 # ── Missing deps for CI tests ──────────────────────────────────────────────
 polars>=0.20.0
 feedparser>=6.0.0
+vaderSentiment>=3.3.2
