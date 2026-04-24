@@ -1,0 +1,2947 @@
+{
+  "report_id": "71f4cabe-0d34-4153-9339-93fc70b86bc7",
+  "generated_at": "2026-04-24T12:03:44.851862+00:00",
+  "combined": {
+    "total_equity": 890284.31,
+    "retail_equity": 20000.0,
+    "inst_equity": 870284.31
+  },
+  "retail": {
+    "portfolio_summary": {
+      "total_equity": 20000.0,
+      "cash": 20000.0,
+      "initial_capital": 20000.0,
+      "realized_pnl": 0.0,
+      "total_pnl": 0.0,
+      "total_pnl_pct": 0.0,
+      "peak_equity": 20000.0,
+      "drawdown_pct": 0.0,
+      "account_scope": "local_simulation",
+      "equity_basis": "portfolio_mark_to_market",
+      "configured_capital_share": 1.0,
+      "allocation_note": "Equity and cash are computed from this portfolio's own simulated positions.",
+      "exit_breakdown": {}
+    },
+    "open_positions": {},
+    "new_trades": [],
+    "signal_summary": {
+      "signals_generated": 50,
+      "signals_approved": 0,
+      "signals_rejected": 0,
+      "rejection_reasons": {},
+      "current_signals": {
+        "BTCUSDT": {
+          "type": "HOLD",
+          "score": 0.254
+        },
+        "ETHUSDT": {
+          "type": "HOLD",
+          "score": 0.18
+        },
+        "SOLUSDT": {
+          "type": "HOLD",
+          "score": 0.374
+        },
+        "BNBUSDT": {
+          "type": "HOLD",
+          "score": 0.303
+        },
+        "NVDA": {
+          "type": "HOLD",
+          "score": 0.496
+        },
+        "SOXX": {
+          "type": "HOLD",
+          "score": 0.384
+        },
+        "QQQ": {
+          "type": "HOLD",
+          "score": 0.435
+        },
+        "SNAP": {
+          "type": "HOLD",
+          "score": 0.22
+        },
+        "LYFT": {
+          "type": "HOLD",
+          "score": 0.338
+        },
+        "UBER": {
+          "type": "HOLD",
+          "score": 0.258
+        },
+        "DASH": {
+          "type": "HOLD",
+          "score": 0.18
+        },
+        "RBLX": {
+          "type": "HOLD",
+          "score": 0.641
+        },
+        "RIVN": {
+          "type": "BUY",
+          "score": 0.799
+        },
+        "LCID": {
+          "type": "HOLD",
+          "score": 0.588
+        },
+        "CHPT": {
+          "type": "HOLD",
+          "score": 0.422
+        },
+        "BYND": {
+          "type": "HOLD",
+          "score": 0.254
+        },
+        "SPCE": {
+          "type": "HOLD",
+          "score": 0.254
+        },
+        "WKHS": {
+          "type": "HOLD",
+          "score": 0.279
+        },
+        "SKLZ": {
+          "type": "HOLD",
+          "score": 0.57
+        },
+        "CLOV": {
+          "type": "HOLD",
+          "score": 0.472
+        },
+        "BB": {
+          "type": "BUY",
+          "score": 0.543
+        },
+        "AMC": {
+          "type": "HOLD",
+          "score": 0.338
+        },
+        "GME": {
+          "type": "HOLD",
+          "score": 0.272
+        },
+        "BBBY": {
+          "type": "BUY",
+          "score": 0.528
+        },
+        "PTON": {
+          "type": "HOLD",
+          "score": 0.334
+        },
+        "ZM": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "TDOC": {
+          "type": "HOLD",
+          "score": 0.491
+        },
+        "CVNA": {
+          "type": "HOLD",
+          "score": 0.448
+        },
+        "OPEN": {
+          "type": "HOLD",
+          "score": 0.468
+        },
+        "HYLN": {
+          "type": "HOLD",
+          "score": 0.258
+        },
+        "W": {
+          "type": "HOLD",
+          "score": 0.398
+        },
+        "ETSY": {
+          "type": "HOLD",
+          "score": 0.308
+        },
+        "SHOP": {
+          "type": "HOLD",
+          "score": 0.303
+        },
+        "SE": {
+          "type": "HOLD",
+          "score": 0.457
+        },
+        "GRAB": {
+          "type": "HOLD",
+          "score": 0.307
+        },
+        "BABA": {
+          "type": "HOLD",
+          "score": 0.468
+        },
+        "JD": {
+          "type": "HOLD",
+          "score": 0.351
+        },
+        "PDD": {
+          "type": "HOLD",
+          "score": 0.469
+        },
+        "NIO": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "LI": {
+          "type": "HOLD",
+          "score": 0.278
+        },
+        "XPEV": {
+          "type": "HOLD",
+          "score": 0.303
+        },
+        "BRCC": {
+          "type": "HOLD",
+          "score": 0.324
+        },
+        "SRFM": {
+          "type": "HOLD",
+          "score": 0.338
+        },
+        "FUBO": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "PAYO": {
+          "type": "HOLD",
+          "score": 0.383
+        },
+        "BKKT": {
+          "type": "HOLD",
+          "score": 0.194
+        },
+        "PSFE": {
+          "type": "BUY",
+          "score": 0.615
+        },
+        "OPFI": {
+          "type": "HOLD",
+          "score": 0.331
+        },
+        "PLTR": {
+          "type": "HOLD",
+          "score": 0.419
+        },
+        "SOFI": {
+          "type": "HOLD",
+          "score": 0.374
+        },
+        "PATH": {
+          "type": "HOLD",
+          "score": 0.47
+        },
+        "AI": {
+          "type": "HOLD",
+          "score": 0.377
+        },
+        "IONQ": {
+          "type": "HOLD",
+          "score": 0.515
+        },
+        "RKLB": {
+          "type": "HOLD",
+          "score": 0.374
+        },
+        "UPST": {
+          "type": "HOLD",
+          "score": 0.253
+        },
+        "AFRM": {
+          "type": "BUY",
+          "score": 0.775
+        },
+        "LMND": {
+          "type": "HOLD",
+          "score": 0.258
+        },
+        "FSLY": {
+          "type": "BUY",
+          "score": 0.741
+        },
+        "NET": {
+          "type": "HOLD",
+          "score": 0.36
+        },
+        "CRWD": {
+          "type": "HOLD",
+          "score": 0.194
+        },
+        "ZS": {
+          "type": "HOLD",
+          "score": 0.324
+        },
+        "OKTA": {
+          "type": "HOLD",
+          "score": 0.264
+        },
+        "SNOW": {
+          "type": "BUY",
+          "score": 0.775
+        },
+        "DDOG": {
+          "type": "HOLD",
+          "score": 0.566
+        },
+        "MDB": {
+          "type": "HOLD",
+          "score": 0.553
+        },
+        "TWLO": {
+          "type": "HOLD",
+          "score": 0.213
+        },
+        "DOCU": {
+          "type": "BUY",
+          "score": 0.577
+        },
+        "SPOT": {
+          "type": "HOLD",
+          "score": 0.377
+        },
+        "CRSP": {
+          "type": "HOLD",
+          "score": 0.18
+        },
+        "EDIT": {
+          "type": "HOLD",
+          "score": 0.384
+        },
+        "NTLA": {
+          "type": "BUY",
+          "score": 0.613
+        },
+        "PACB": {
+          "type": "HOLD",
+          "score": 0.389
+        },
+        "BEAM": {
+          "type": "BUY",
+          "score": 0.701
+        },
+        "TXG": {
+          "type": "HOLD",
+          "score": 0.469
+        },
+        "GH": {
+          "type": "HOLD",
+          "score": 0.556
+        },
+        "ILMN": {
+          "type": "HOLD",
+          "score": 0.317
+        },
+        "SRPT": {
+          "type": "HOLD",
+          "score": 0.288
+        },
+        "ALNY": {
+          "type": "HOLD",
+          "score": 0.355
+        },
+        "BNTX": {
+          "type": "HOLD",
+          "score": 0.422
+        },
+        "MRNA": {
+          "type": "HOLD",
+          "score": 0.406
+        },
+        "NVS": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "DXCM": {
+          "type": "HOLD",
+          "score": 0.335
+        },
+        "COIN": {
+          "type": "HOLD",
+          "score": 0.3
+        },
+        "MSTR": {
+          "type": "HOLD",
+          "score": 0.588
+        },
+        "MARA": {
+          "type": "HOLD",
+          "score": 0.485
+        },
+        "RIOT": {
+          "type": "HOLD",
+          "score": 0.427
+        },
+        "HUT": {
+          "type": "BUY",
+          "score": 0.879
+        },
+        "CLSK": {
+          "type": "HOLD",
+          "score": 0.379
+        },
+        "CIFR": {
+          "type": "BUY",
+          "score": 0.799
+        },
+        "IREN": {
+          "type": "HOLD",
+          "score": 0.61
+        },
+        "WULF": {
+          "type": "HOLD",
+          "score": 0.308
+        },
+        "BITF": {
+          "type": "HOLD",
+          "score": 0.303
+        },
+        "HOOD": {
+          "type": "BUY",
+          "score": 0.606
+        },
+        "PYPL": {
+          "type": "HOLD",
+          "score": 0.27
+        },
+        "MQ": {
+          "type": "HOLD",
+          "score": 0.334
+        },
+        "CCJ": {
+          "type": "HOLD",
+          "score": 0.507
+        },
+        "UUUU": {
+          "type": "BUY",
+          "score": 0.662
+        },
+        "UEC": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "NXE": {
+          "type": "BUY",
+          "score": 0.662
+        },
+        "ALB": {
+          "type": "HOLD",
+          "score": 0.334
+        },
+        "SGML": {
+          "type": "HOLD",
+          "score": 0.334
+        },
+        "SQM": {
+          "type": "HOLD",
+          "score": 0.469
+        },
+        "TECK": {
+          "type": "BUY",
+          "score": 0.536
+        },
+        "CLF": {
+          "type": "BUY",
+          "score": 0.613
+        },
+        "AA": {
+          "type": "HOLD",
+          "score": 0.377
+        },
+        "CENX": {
+          "type": "HOLD",
+          "score": 0.272
+        },
+        "AAPL": {
+          "type": "HOLD",
+          "score": 0.468
+        },
+        "MSFT": {
+          "type": "HOLD",
+          "score": 0.431
+        },
+        "GOOGL": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "META": {
+          "type": "HOLD",
+          "score": 0.18
+        },
+        "AMZN": {
+          "type": "HOLD",
+          "score": 0.448
+        },
+        "TSLA": {
+          "type": "HOLD",
+          "score": 0.377
+        },
+        "AVGO": {
+          "type": "BUY",
+          "score": 0.55
+        },
+        "AMD": {
+          "type": "HOLD",
+          "score": 0.458
+        },
+        "CRM": {
+          "type": "HOLD",
+          "score": 0.353
+        },
+        "ORCL": {
+          "type": "HOLD",
+          "score": 0.308
+        },
+        "IBM": {
+          "type": "BUY",
+          "score": 0.776
+        },
+        "INTC": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "ASML": {
+          "type": "BUY",
+          "score": 0.543
+        },
+        "TSM": {
+          "type": "HOLD",
+          "score": 0.399
+        },
+        "CSCO": {
+          "type": "HOLD",
+          "score": 0.308
+        },
+        "ADBE": {
+          "type": "HOLD",
+          "score": 0.369
+        },
+        "NFLX": {
+          "type": "HOLD",
+          "score": 0.566
+        },
+        "TXN": {
+          "type": "HOLD",
+          "score": 0.438
+        },
+        "QCOM": {
+          "type": "BUY",
+          "score": 0.801
+        },
+        "AMAT": {
+          "type": "HOLD",
+          "score": 0.369
+        },
+        "INTU": {
+          "type": "HOLD",
+          "score": 0.343
+        },
+        "MU": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "NOW": {
+          "type": "HOLD",
+          "score": 0.448
+        },
+        "LRCX": {
+          "type": "BUY",
+          "score": 0.528
+        },
+        "UNH": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "JNJ": {
+          "type": "HOLD",
+          "score": 0.349
+        },
+        "LLY": {
+          "type": "HOLD",
+          "score": 0.448
+        },
+        "ABBV": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "MRK": {
+          "type": "HOLD",
+          "score": 0.303
+        },
+        "PFE": {
+          "type": "HOLD",
+          "score": 0.431
+        },
+        "AMGN": {
+          "type": "HOLD",
+          "score": 0.451
+        },
+        "TMO": {
+          "type": "HOLD",
+          "score": 0.334
+        },
+        "DHR": {
+          "type": "HOLD",
+          "score": 0.57
+        },
+        "ABT": {
+          "type": "HOLD",
+          "score": 0.434
+        },
+        "BMY": {
+          "type": "HOLD",
+          "score": 0.36
+        },
+        "SYK": {
+          "type": "HOLD",
+          "score": 0.415
+        },
+        "CVS": {
+          "type": "BUY",
+          "score": 0.514
+        },
+        "CI": {
+          "type": "BUY",
+          "score": 0.597
+        },
+        "ZTS": {
+          "type": "HOLD",
+          "score": 0.356
+        },
+        "BSX": {
+          "type": "HOLD",
+          "score": 0.472
+        },
+        "GILD": {
+          "type": "HOLD",
+          "score": 0.268
+        },
+        "MDT": {
+          "type": "HOLD",
+          "score": 0.303
+        },
+        "ELV": {
+          "type": "HOLD",
+          "score": 0.472
+        },
+        "VRTX": {
+          "type": "HOLD",
+          "score": 0.223
+        },
+        "REGN": {
+          "type": "HOLD",
+          "score": 0.233
+        },
+        "HCA": {
+          "type": "HOLD",
+          "score": 0.468
+        },
+        "BDX": {
+          "type": "HOLD",
+          "score": 0.469
+        },
+        "HUM": {
+          "type": "HOLD",
+          "score": 0.423
+        },
+        "ISRG": {
+          "type": "HOLD",
+          "score": 0.425
+        },
+        "JPM": {
+          "type": "HOLD",
+          "score": 0.303
+        },
+        "V": {
+          "type": "HOLD",
+          "score": 0.372
+        },
+        "MA": {
+          "type": "HOLD",
+          "score": 0.483
+        },
+        "BAC": {
+          "type": "BUY",
+          "score": 0.543
+        },
+        "WFC": {
+          "type": "HOLD",
+          "score": 0.49
+        },
+        "MS": {
+          "type": "HOLD",
+          "score": 0.395
+        },
+        "GS": {
+          "type": "HOLD",
+          "score": 0.344
+        },
+        "BX": {
+          "type": "HOLD",
+          "score": 0.303
+        },
+        "C": {
+          "type": "HOLD",
+          "score": 0.395
+        },
+        "SPGI": {
+          "type": "HOLD",
+          "score": 0.293
+        },
+        "AXP": {
+          "type": "BUY",
+          "score": 0.755
+        },
+        "MCO": {
+          "type": "HOLD",
+          "score": 0.153
+        },
+        "SCHW": {
+          "type": "HOLD",
+          "score": 0.431
+        },
+        "BLK": {
+          "type": "HOLD",
+          "score": 0.411
+        },
+        "CB": {
+          "type": "HOLD",
+          "score": 0.377
+        },
+        "PGR": {
+          "type": "HOLD",
+          "score": 0.194
+        },
+        "CME": {
+          "type": "HOLD",
+          "score": 0.438
+        },
+        "USB": {
+          "type": "BUY",
+          "score": 0.586
+        },
+        "PNC": {
+          "type": "BUY",
+          "score": 0.543
+        },
+        "TFC": {
+          "type": "BUY",
+          "score": 0.543
+        },
+        "ICE": {
+          "type": "HOLD",
+          "score": 0.398
+        },
+        "AON": {
+          "type": "HOLD",
+          "score": 0.303
+        },
+        "COF": {
+          "type": "HOLD",
+          "score": 0.349
+        },
+        "AFL": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "XOM": {
+          "type": "HOLD",
+          "score": 0.49
+        },
+        "CVX": {
+          "type": "HOLD",
+          "score": 0.49
+        },
+        "COP": {
+          "type": "SELL",
+          "score": 0.543
+        },
+        "NEM": {
+          "type": "HOLD",
+          "score": 0.515
+        },
+        "FCX": {
+          "type": "HOLD",
+          "score": 0.437
+        },
+        "EOG": {
+          "type": "HOLD",
+          "score": 0.409
+        },
+        "SLB": {
+          "type": "HOLD",
+          "score": 0.465
+        },
+        "MPC": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "PSX": {
+          "type": "BUY",
+          "score": 0.543
+        },
+        "VLO": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "OXY": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "WMB": {
+          "type": "HOLD",
+          "score": 0.22
+        },
+        "KMI": {
+          "type": "HOLD",
+          "score": 0.213
+        },
+        "HAL": {
+          "type": "BUY",
+          "score": 0.597
+        },
+        "BKR": {
+          "type": "BUY",
+          "score": 0.707
+        },
+        "DVN": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "FANG": {
+          "type": "SELL",
+          "score": 0.543
+        },
+        "TRGP": {
+          "type": "HOLD",
+          "score": 0.394
+        },
+        "CTRA": {
+          "type": "HOLD",
+          "score": 0.307
+        },
+        "NTR": {
+          "type": "HOLD",
+          "score": 0.303
+        },
+        "SCCO": {
+          "type": "HOLD",
+          "score": 0.327
+        },
+        "NUE": {
+          "type": "BUY",
+          "score": 0.481
+        },
+        "STLD": {
+          "type": "BUY",
+          "score": 0.615
+        },
+        "RS": {
+          "type": "HOLD",
+          "score": 0.427
+        },
+        "WMT": {
+          "type": "BUY",
+          "score": 0.586
+        },
+        "PG": {
+          "type": "BUY",
+          "score": 0.597
+        },
+        "HD": {
+          "type": "HOLD",
+          "score": 0.376
+        },
+        "COST": {
+          "type": "HOLD",
+          "score": 0.334
+        },
+        "MCD": {
+          "type": "BUY",
+          "score": 0.633
+        },
+        "PEP": {
+          "type": "HOLD",
+          "score": 0.356
+        },
+        "KO": {
+          "type": "HOLD",
+          "score": 0.398
+        },
+        "TM": {
+          "type": "HOLD",
+          "score": 0.344
+        },
+        "NKE": {
+          "type": "HOLD",
+          "score": 0.52
+        },
+        "BA": {
+          "type": "HOLD",
+          "score": 0.344
+        },
+        "CAT": {
+          "type": "HOLD",
+          "score": 0.334
+        },
+        "LMT": {
+          "type": "BUY",
+          "score": 0.674
+        },
+        "RTX": {
+          "type": "HOLD",
+          "score": 0.444
+        },
+        "DE": {
+          "type": "HOLD",
+          "score": 0.381
+        },
+        "UNP": {
+          "type": "HOLD",
+          "score": 0.418
+        },
+        "SPY": {
+          "type": "HOLD",
+          "score": 0.435
+        },
+        "DIA": {
+          "type": "HOLD",
+          "score": 0.556
+        },
+        "IWM": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "VTI": {
+          "type": "HOLD",
+          "score": 0.435
+        },
+        "VOO": {
+          "type": "HOLD",
+          "score": 0.435
+        },
+        "QQQM": {
+          "type": "HOLD",
+          "score": 0.435
+        },
+        "RSP": {
+          "type": "HOLD",
+          "score": 0.469
+        },
+        "XLK": {
+          "type": "HOLD",
+          "score": 0.384
+        },
+        "VGT": {
+          "type": "HOLD",
+          "score": 0.384
+        },
+        "IGV": {
+          "type": "HOLD",
+          "score": 0.254
+        },
+        "SMH": {
+          "type": "HOLD",
+          "score": 0.5
+        },
+        "BOTZ": {
+          "type": "HOLD",
+          "score": 0.455
+        },
+        "ARKK": {
+          "type": "HOLD",
+          "score": 0.384
+        },
+        "XLV": {
+          "type": "HOLD",
+          "score": 0.415
+        },
+        "VHT": {
+          "type": "BUY",
+          "score": 0.696
+        },
+        "IBB": {
+          "type": "HOLD",
+          "score": 0.45
+        },
+        "XBI": {
+          "type": "HOLD",
+          "score": 0.61
+        },
+        "IYH": {
+          "type": "HOLD",
+          "score": 0.415
+        },
+        "XLF": {
+          "type": "HOLD",
+          "score": 0.49
+        },
+        "VFH": {
+          "type": "HOLD",
+          "score": 0.51
+        },
+        "KRE": {
+          "type": "BUY",
+          "score": 0.586
+        },
+        "KBE": {
+          "type": "BUY",
+          "score": 0.736
+        },
+        "XLE": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "VDE": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "XOP": {
+          "type": "BUY",
+          "score": 0.631
+        },
+        "OIH": {
+          "type": "HOLD",
+          "score": 0.415
+        },
+        "XLB": {
+          "type": "BUY",
+          "score": 0.696
+        },
+        "VAW": {
+          "type": "BUY",
+          "score": 0.858
+        },
+        "XLI": {
+          "type": "HOLD",
+          "score": 0.204
+        },
+        "VIS": {
+          "type": "HOLD",
+          "score": 0.344
+        },
+        "XLY": {
+          "type": "HOLD",
+          "score": 0.518
+        },
+        "VCR": {
+          "type": "HOLD",
+          "score": 0.518
+        },
+        "XLC": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "VOX": {
+          "type": "HOLD",
+          "score": 0.457
+        },
+        "XLU": {
+          "type": "HOLD",
+          "score": 0.398
+        },
+        "VPU": {
+          "type": "HOLD",
+          "score": 0.398
+        },
+        "VNQ": {
+          "type": "HOLD",
+          "score": 0.415
+        },
+        "SCHH": {
+          "type": "HOLD",
+          "score": 0.415
+        },
+        "GLD": {
+          "type": "BUY",
+          "score": 0.485
+        },
+        "IAU": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "SLV": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "PPLT": {
+          "type": "BUY",
+          "score": 0.707
+        },
+        "USO": {
+          "type": "HOLD",
+          "score": 0.295
+        },
+        "BNO": {
+          "type": "HOLD",
+          "score": 0.396
+        },
+        "UNG": {
+          "type": "HOLD",
+          "score": 0.325
+        },
+        "DBA": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "PDBC": {
+          "type": "BUY",
+          "score": 0.597
+        },
+        "DBC": {
+          "type": "BUY",
+          "score": 0.645
+        },
+        "SH": {
+          "type": "HOLD",
+          "score": 0.278
+        },
+        "PSQ": {
+          "type": "HOLD",
+          "score": 0.278
+        },
+        "DOG": {
+          "type": "HOLD",
+          "score": 0.344
+        },
+        "SDS": {
+          "type": "HOLD",
+          "score": 0.278
+        },
+        "QID": {
+          "type": "HOLD",
+          "score": 0.278
+        },
+        "SPXS": {
+          "type": "HOLD",
+          "score": 0.278
+        },
+        "SQQQ": {
+          "type": "HOLD",
+          "score": 0.379
+        },
+        "SDOW": {
+          "type": "HOLD",
+          "score": 0.344
+        },
+        "TZA": {
+          "type": "HOLD",
+          "score": 0.519
+        },
+        "FAZ": {
+          "type": "HOLD",
+          "score": 0.303
+        },
+        "YANG": {
+          "type": "HOLD",
+          "score": 0.194
+        },
+        "EDZ": {
+          "type": "HOLD",
+          "score": 0.194
+        },
+        "VXX": {
+          "type": "HOLD",
+          "score": 0.491
+        },
+        "UVXY": {
+          "type": "HOLD",
+          "score": 0.491
+        },
+        "VIXY": {
+          "type": "HOLD",
+          "score": 0.491
+        },
+        "TLT": {
+          "type": "HOLD",
+          "score": 0.242
+        },
+        "IEF": {
+          "type": "HOLD",
+          "score": 0.414
+        },
+        "SHY": {
+          "type": "HOLD",
+          "score": 0.371
+        },
+        "SGOL": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "SOXS": {
+          "type": "HOLD",
+          "score": 0.245
+        },
+        "LABD": {
+          "type": "HOLD",
+          "score": 0.588
+        },
+        "DRV": {
+          "type": "HOLD",
+          "score": 0.295
+        }
+      }
+    }
+  },
+  "institutional": {
+    "portfolio_summary": {
+      "total_equity": 870284.3146,
+      "cash": 350588.2022,
+      "initial_capital": 980000.0,
+      "realized_pnl": -116410.3083,
+      "total_pnl": -109715.6854,
+      "total_pnl_pct": -0.111955,
+      "peak_equity": 985667.9906,
+      "drawdown_pct": 0.117061,
+      "account_scope": "local_simulation",
+      "equity_basis": "portfolio_mark_to_market",
+      "configured_capital_share": 1.0,
+      "allocation_note": "Equity and cash are computed from this portfolio's own simulated positions.",
+      "exit_breakdown": {
+        "SL_HIT": 13,
+        "TP_HIT": 13
+      }
+    },
+    "open_positions": {
+      "ABT": {
+        "quantity": 318.627856,
+        "avg_entry_price": 128.8293,
+        "current_price": 130.135,
+        "unrealized_pnl": 416.0258,
+        "unrealized_pnl_pct": 0.010135,
+        "position_value_usdt": 41464.6294,
+        "stop_loss_price": 124.9025,
+        "take_profit_price": 140.6098,
+        "r_multiple": 3.0,
+        "trailing_high": 128.8293,
+        "entry_atr": 2.6151,
+        "side": "long",
+        "opened_at": "2026-04-24T11:03:52.229484+00:00",
+        "stop_loss": 124.9025,
+        "take_profit": 140.6098,
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "asset_role": "defensive_equity",
+        "vwap_at_entry": 130.204956
+      },
+      "HAL": {
+        "quantity": 2005.793462,
+        "avg_entry_price": 21.3699,
+        "current_price": 21.5282,
+        "unrealized_pnl": 317.4677,
+        "unrealized_pnl_pct": 0.007406,
+        "position_value_usdt": 43181.0734,
+        "stop_loss_price": 20.2752,
+        "take_profit_price": 24.6541,
+        "r_multiple": 3.0,
+        "trailing_high": 21.3699,
+        "entry_atr": 0.72904,
+        "side": "long",
+        "opened_at": "2026-04-24T11:28:27.500914+00:00",
+        "stop_loss": 20.2752,
+        "take_profit": 24.6541,
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "asset_role": "commodity_cyclical",
+        "vwap_at_entry": 21.880795
+      },
+      "MRK": {
+        "quantity": 545.465324,
+        "avg_entry_price": 78.5819,
+        "current_price": 81.9548,
+        "unrealized_pnl": 1839.8019,
+        "unrealized_pnl_pct": 0.042922,
+        "position_value_usdt": 44703.5034,
+        "stop_loss_price": 75.6251,
+        "take_profit_price": 87.4526,
+        "r_multiple": 3.0,
+        "trailing_high": 78.5819,
+        "entry_atr": 1.640987,
+        "side": "long",
+        "opened_at": "2026-04-24T11:28:27.501805+00:00",
+        "stop_loss": 75.6251,
+        "take_profit": 87.4526,
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "asset_role": "defensive_equity",
+        "vwap_at_entry": 82.131493
+      },
+      "COP": {
+        "quantity": 458.746673,
+        "avg_entry_price": 93.2222,
+        "current_price": 89.8604,
+        "unrealized_pnl": -1542.2053,
+        "unrealized_pnl_pct": -0.036062,
+        "position_value_usdt": 41223.1688,
+        "stop_loss_price": 89.4884,
+        "take_profit_price": 104.4237,
+        "r_multiple": 3.0,
+        "trailing_high": 93.2222,
+        "entry_atr": 2.4866,
+        "side": "long",
+        "opened_at": "2026-04-24T11:31:06.502871+00:00",
+        "stop_loss": 89.4884,
+        "take_profit": 104.4237,
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "asset_role": "commodity_cyclical",
+        "vwap_at_entry": 93.39805
+      },
+      "XLE": {
+        "quantity": 1000.702551,
+        "avg_entry_price": 42.7155,
+        "current_price": 42.5679,
+        "unrealized_pnl": -147.7059,
+        "unrealized_pnl_pct": -0.003455,
+        "position_value_usdt": 42597.8039,
+        "stop_loss_price": 41.2999,
+        "take_profit_price": 46.9624,
+        "r_multiple": 3.0,
+        "trailing_high": 42.7155,
+        "entry_atr": 0.942748,
+        "side": "long",
+        "opened_at": "2026-04-24T11:31:28.360055+00:00",
+        "stop_loss": 41.2999,
+        "take_profit": 46.9624,
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "asset_role": "commodity_cyclical",
+        "vwap_at_entry": 43.298947
+      },
+      "COF": {
+        "quantity": 208.93858,
+        "avg_entry_price": 204.456,
+        "current_price": 218.4303,
+        "unrealized_pnl": 2919.7731,
+        "unrealized_pnl_pct": 0.068349,
+        "position_value_usdt": 45638.5195,
+        "stop_loss_price": 194.2821,
+        "take_profit_price": 234.9778,
+        "r_multiple": 3.0,
+        "trailing_high": 204.456,
+        "entry_atr": 6.775468,
+        "side": "long",
+        "opened_at": "2026-04-24T11:33:47.317614+00:00",
+        "stop_loss": 194.2821,
+        "take_profit": 234.9778,
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "asset_role": "risk_on_equity",
+        "vwap_at_entry": 221.138589
+      },
+      "BLK": {
+        "quantity": 38.316787,
+        "avg_entry_price": 1089.9522,
+        "current_price": 1093.4803,
+        "unrealized_pnl": 135.1872,
+        "unrealized_pnl_pct": 0.003237,
+        "position_value_usdt": 41898.6535,
+        "stop_loss_price": 1060.4298,
+        "take_profit_price": 1178.5196,
+        "r_multiple": 3.0,
+        "trailing_high": 1089.9522,
+        "entry_atr": 24.576351,
+        "side": "long",
+        "opened_at": "2026-04-24T11:42:31.917762+00:00",
+        "stop_loss": 1060.4298,
+        "take_profit": 1178.5196,
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "asset_role": "risk_on_equity",
+        "vwap_at_entry": 1092.403129
+      },
+      "BNBUSDT": {
+        "quantity": 53.752567,
+        "avg_entry_price": 788.3375,
+        "current_price": 879.87,
+        "unrealized_pnl": 4920.1068,
+        "unrealized_pnl_pct": 0.116108,
+        "position_value_usdt": 47295.2711,
+        "stop_loss_price": 730.3521,
+        "take_profit_price": 962.2936,
+        "r_multiple": 3.0,
+        "trailing_high": 788.3375,
+        "entry_atr": 14.4809,
+        "side": "long",
+        "opened_at": "2026-04-24T11:44:31.261064+00:00",
+        "stop_loss": 730.3521,
+        "take_profit": 962.2936,
+        "agent_source": "crypto",
+        "strategy_bucket": "crypto",
+        "asset_role": "crypto_native",
+        "vwap_at_entry": 858.591383
+      },
+      "IYH": {
+        "quantity": 758.13089,
+        "avg_entry_price": 56.518,
+        "current_price": 57.6061,
+        "unrealized_pnl": 824.9006,
+        "unrealized_pnl_pct": 0.019252,
+        "position_value_usdt": 43672.9422,
+        "stop_loss_price": 55.5146,
+        "take_profit_price": 59.5281,
+        "r_multiple": 3.0,
+        "trailing_high": 56.518,
+        "entry_atr": 0.835257,
+        "side": "long",
+        "opened_at": "2026-04-24T11:45:15.988653+00:00",
+        "stop_loss": 55.5146,
+        "take_profit": 59.5281,
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "asset_role": "defensive_equity",
+        "vwap_at_entry": 57.315183
+      },
+      "GILD": {
+        "quantity": 363.972965,
+        "avg_entry_price": 117.2677,
+        "current_price": 113.6801,
+        "unrealized_pnl": -1305.7785,
+        "unrealized_pnl_pct": -0.030593,
+        "position_value_usdt": 41376.494,
+        "stop_loss_price": 113.4613,
+        "take_profit_price": 128.6869,
+        "r_multiple": 3.0,
+        "trailing_high": 117.2677,
+        "entry_atr": 2.534916,
+        "side": "long",
+        "opened_at": "2026-04-24T11:51:02.963468+00:00",
+        "stop_loss": 113.4613,
+        "take_profit": 128.6869,
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "asset_role": "defensive_equity",
+        "vwap_at_entry": 111.895318
+      },
+      "QQQ": {
+        "quantity": 74.262428,
+        "avg_entry_price": 578.5192,
+        "current_price": 576.7285,
+        "unrealized_pnl": -132.9806,
+        "unrealized_pnl_pct": -0.003095,
+        "position_value_usdt": 42829.2599,
+        "stop_loss_price": 569.5545,
+        "take_profit_price": 605.4134,
+        "r_multiple": 3.0,
+        "trailing_high": 578.5192,
+        "entry_atr": 5.9701,
+        "side": "long",
+        "opened_at": "2026-04-24T11:52:42.208841+00:00",
+        "stop_loss": 569.5545,
+        "take_profit": 605.4134,
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "asset_role": "risk_on_equity",
+        "vwap_at_entry": 569.77529
+      },
+      "VNQ": {
+        "quantity": 490.743344,
+        "avg_entry_price": 88.1817,
+        "current_price": 89.2825,
+        "unrealized_pnl": 540.2109,
+        "unrealized_pnl_pct": 0.012483,
+        "position_value_usdt": 43814.7932,
+        "stop_loss_price": 87.0188,
+        "take_profit_price": 91.6703,
+        "r_multiple": 3.0,
+        "trailing_high": 88.1817,
+        "entry_atr": 0.774437,
+        "side": "long",
+        "opened_at": "2026-04-24T11:55:53.974165+00:00",
+        "stop_loss": 87.0188,
+        "take_profit": 91.6703,
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "asset_role": "defensive_equity",
+        "vwap_at_entry": 88.846041
+      }
+    },
+    "new_trades": [
+      {
+        "id": "43f57f2e-dec1-4d9d-a78a-3a91b87cafa4",
+        "symbol": "RIVN",
+        "side": "BUY",
+        "quantity": 3922.731462,
+        "fill_price": 12.5034,
+        "notional": 49047.5116,
+        "commission": 49.0475,
+        "stop_loss_price": 11.6282,
+        "take_profit_price": 15.1291,
+        "stop_loss": 11.6282,
+        "take_profit": 15.1291,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-02T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "835ae3da-f47c-4c20-bc0a-2ee1bb174a69",
+        "symbol": "ABT",
+        "side": "BUY",
+        "quantity": 318.627856,
+        "fill_price": 128.8293,
+        "notional": 41048.6063,
+        "commission": 41.0486,
+        "stop_loss_price": 124.9025,
+        "take_profit_price": 140.6098,
+        "stop_loss": 124.9025,
+        "take_profit": 140.6098,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-02T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "a915f169-2e54-4be4-bdc1-81f2602d9a47",
+        "symbol": "OXY",
+        "side": "SELL",
+        "quantity": 2094.514587,
+        "fill_price": 42.9206,
+        "notional": 89897.8851,
+        "commission": 89.8979,
+        "stop_loss_price": 45.4253,
+        "take_profit_price": 35.4066,
+        "stop_loss": 45.4253,
+        "take_profit": 35.4066,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-03T00:00:00+00:00",
+        "reason": "SIGNAL_SELL",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "720fc6f9-35ef-4b5e-b937-ed411dcd6605",
+        "symbol": "DVN",
+        "side": "SELL",
+        "quantity": 1338.009384,
+        "fill_price": 32.2906,
+        "notional": 43205.0835,
+        "commission": 43.205083,
+        "realized_pnl": -5890.7499,
+        "timestamp": "2025-04-03T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "666f1cae-a482-498e-82b9-6f210d3ca834",
+        "symbol": "V",
+        "side": "SELL",
+        "quantity": 289.571662,
+        "fill_price": 310.4511,
+        "notional": 89897.8519,
+        "commission": 89.8979,
+        "stop_loss_price": 327.2071,
+        "take_profit_price": 260.1832,
+        "stop_loss": 327.2071,
+        "take_profit": 260.1832,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-04T00:00:00+00:00",
+        "reason": "SIGNAL_SELL",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "0fb35c01-70fb-4b3c-8371-da3199cc62d9",
+        "symbol": "IEF",
+        "side": "BUY",
+        "quantity": 431.177487,
+        "fill_price": 91.9388,
+        "notional": 39641.9394,
+        "commission": 39.6419,
+        "stop_loss_price": 91.1113,
+        "take_profit_price": 94.4211,
+        "stop_loss": 91.1113,
+        "take_profit": 94.4211,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-07T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bear_hedge",
+        "strategy_bucket": "bear",
+        "mode": "institutional"
+      },
+      {
+        "id": "9fec312a-7d98-4e2c-a185-d810bd82f581",
+        "symbol": "RIVN",
+        "side": "SELL",
+        "quantity": 3922.731462,
+        "fill_price": 11.1988,
+        "notional": 43929.8459,
+        "commission": 43.929846,
+        "realized_pnl": -5161.5645,
+        "timestamp": "2025-04-07T00:00:00+00:00",
+        "reason": "SIGNAL_SELL",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "aa197dbd-a733-45ca-bf8e-51f025f60baf",
+        "symbol": "RIVN",
+        "side": "SELL",
+        "quantity": 8028.545914,
+        "fill_price": 11.1973,
+        "notional": 89897.8497,
+        "commission": 89.8978,
+        "stop_loss_price": 11.9811,
+        "take_profit_price": 8.8458,
+        "stop_loss": 11.9811,
+        "take_profit": 8.8458,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-07T00:00:00+00:00",
+        "reason": "SIGNAL_SELL",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "eb808b9a-4ff6-4b53-8c4b-dd1719195e1e",
+        "symbol": "OXY",
+        "side": "BUY",
+        "quantity": 2094.514587,
+        "fill_price": 35.442,
+        "notional": 74233.7998,
+        "commission": 74.2338,
+        "realized_pnl": 15589.7892,
+        "timestamp": "2025-04-08T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "aae44ec1-4e38-49f6-82df-42e9666578e3",
+        "symbol": "TSLA",
+        "side": "SELL",
+        "quantity": 301.317421,
+        "fill_price": 221.6159,
+        "notional": 66776.7293,
+        "commission": 66.7767,
+        "stop_loss_price": 237.129,
+        "take_profit_price": 175.0766,
+        "stop_loss": 237.129,
+        "take_profit": 175.0766,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-08T00:00:00+00:00",
+        "reason": "SIGNAL_SELL",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "73792cfe-11d5-4705-9615-7ce2ff4ff3b8",
+        "symbol": "SH",
+        "side": "BUY",
+        "quantity": 909.908436,
+        "fill_price": 43.567,
+        "notional": 39641.9863,
+        "commission": 39.642,
+        "stop_loss_price": 42.6788,
+        "take_profit_price": 46.2315,
+        "stop_loss": 42.6788,
+        "take_profit": 46.2315,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-09T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bear_hedge",
+        "strategy_bucket": "bear",
+        "mode": "institutional"
+      },
+      {
+        "id": "2870e73e-8387-4931-b1e4-f2d417bdc032",
+        "symbol": "RBLX",
+        "side": "SELL",
+        "quantity": 1603.706374,
+        "fill_price": 56.0563,
+        "notional": 89897.8517,
+        "commission": 89.8979,
+        "stop_loss_price": 59.9802,
+        "take_profit_price": 44.2845,
+        "stop_loss": 59.9802,
+        "take_profit": 44.2845,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-10T00:00:00+00:00",
+        "reason": "SIGNAL_SELL",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "6c713701-7d1c-4466-94d2-7c051164aefc",
+        "symbol": "IEF",
+        "side": "SELL",
+        "quantity": 431.177487,
+        "fill_price": 89.9226,
+        "notional": 38772.5969,
+        "commission": 38.772597,
+        "realized_pnl": -908.1165,
+        "timestamp": "2025-04-11T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "bear_hedge",
+        "strategy_bucket": "bear"
+      },
+      {
+        "id": "a71f945e-5802-43a5-bdad-1efcdba6e313",
+        "symbol": "OPEN",
+        "side": "SELL",
+        "quantity": 98253.274189,
+        "fill_price": 0.915,
+        "notional": 89897.8492,
+        "commission": 89.8978,
+        "stop_loss_price": 0.979,
+        "take_profit_price": 0.7229,
+        "stop_loss": 0.979,
+        "take_profit": 0.7229,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-15T00:00:00+00:00",
+        "reason": "SIGNAL_SELL",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "d29a7d6c-9a74-48e4-bbd0-cd4422c2abc9",
+        "symbol": "PSX",
+        "side": "SELL",
+        "quantity": 966.188228,
+        "fill_price": 93.0439,
+        "notional": 89897.8969,
+        "commission": 89.8979,
+        "stop_loss_price": 99.5569,
+        "take_profit_price": 73.5047,
+        "stop_loss": 99.5569,
+        "take_profit": 73.5047,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-16T00:00:00+00:00",
+        "reason": "SIGNAL_SELL",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "1a9d6970-3215-40c0-a41b-3dd26ababcee",
+        "symbol": "ALB",
+        "side": "SELL",
+        "quantity": 1730.861796,
+        "fill_price": 51.9382,
+        "notional": 89897.817,
+        "commission": 89.8978,
+        "stop_loss_price": 55.5739,
+        "take_profit_price": 41.0312,
+        "stop_loss": 55.5739,
+        "take_profit": 41.0312,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-17T00:00:00+00:00",
+        "reason": "SIGNAL_SELL",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "55e2c816-6920-41f0-92cb-e5c3b2c1da47",
+        "symbol": "RBLX",
+        "side": "BUY",
+        "quantity": 1603.706374,
+        "fill_price": 74.1641,
+        "notional": 118937.418,
+        "commission": 118.937418,
+        "realized_pnl": -29158.5098,
+        "timestamp": "2025-05-02T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "9dcbc716-26b4-44ea-b55d-d8c53af56233",
+        "symbol": "OPEN",
+        "side": "BUY",
+        "quantity": 98253.274189,
+        "fill_price": 0.7236,
+        "notional": 71098.3192,
+        "commission": 71.098319,
+        "realized_pnl": 18732.3284,
+        "timestamp": "2025-05-06T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "79097bbf-3303-46ac-9780-85e1444d5c06",
+        "symbol": "HAL",
+        "side": "SELL",
+        "quantity": 4776.21029,
+        "fill_price": 18.822,
+        "notional": 89897.8909,
+        "commission": 89.8979,
+        "stop_loss_price": 20.0399,
+        "take_profit_price": 15.1683,
+        "stop_loss": 20.0399,
+        "take_profit": 15.1683,
+        "r_multiple": 3.0,
+        "timestamp": "2025-05-07T00:00:00+00:00",
+        "reason": "SIGNAL_SELL",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "a675f1c6-a624-4813-89ce-0c82a26d519f",
+        "symbol": "ETHUSDT",
+        "side": "BUY",
+        "quantity": 20.798231,
+        "fill_price": 2210.1098,
+        "notional": 45966.3744,
+        "commission": 45.9664,
+        "stop_loss_price": 2033.301,
+        "take_profit_price": 2740.5362,
+        "stop_loss": 2033.301,
+        "take_profit": 2740.5362,
+        "r_multiple": 3.0,
+        "timestamp": "2025-05-08T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "ec562c35-05ca-4978-bd6d-a861ba2556f5",
+        "symbol": "ALNY",
+        "side": "BUY",
+        "quantity": 177.732898,
+        "fill_price": 258.6261,
+        "notional": 45966.3741,
+        "commission": 45.9664,
+        "stop_loss_price": 248.2211,
+        "take_profit_price": 289.8413,
+        "stop_loss": 248.2211,
+        "take_profit": 289.8413,
+        "r_multiple": 3.0,
+        "timestamp": "2025-05-08T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "be2f260d-99fe-4ee5-a652-71156e779827",
+        "symbol": "PGR",
+        "side": "BUY",
+        "quantity": 165.342922,
+        "fill_price": 266.898,
+        "notional": 44129.7024,
+        "commission": 44.1297,
+        "stop_loss_price": 258.7029,
+        "take_profit_price": 291.4834,
+        "stop_loss": 258.7029,
+        "take_profit": 291.4834,
+        "r_multiple": 3.0,
+        "timestamp": "2025-05-08T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "ae694925-8b75-4e53-8d3d-058084750799",
+        "symbol": "JPM",
+        "side": "BUY",
+        "quantity": 180.723187,
+        "fill_price": 248.517,
+        "notional": 44912.7768,
+        "commission": 44.9128,
+        "stop_loss_price": 240.1054,
+        "take_profit_price": 273.7516,
+        "stop_loss": 240.1054,
+        "take_profit": 273.7516,
+        "r_multiple": 3.0,
+        "timestamp": "2025-05-09T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "3a60d902-e3e1-4987-bf1c-4d7de3447a20",
+        "symbol": "TSLA",
+        "side": "BUY",
+        "quantity": 301.317421,
+        "fill_price": 334.4041,
+        "notional": 100761.7742,
+        "commission": 100.761774,
+        "realized_pnl": -34085.8045,
+        "timestamp": "2025-05-13T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "1cc863e2-0a87-46bb-a592-a4d69ae1cd27",
+        "symbol": "SH",
+        "side": "SELL",
+        "quantity": 909.908436,
+        "fill_price": 40.308,
+        "notional": 36676.6086,
+        "commission": 36.676609,
+        "realized_pnl": -3002.0489,
+        "timestamp": "2025-05-13T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "bear_hedge",
+        "strategy_bucket": "bear"
+      },
+      {
+        "id": "1dadc03f-852e-43e7-ac2b-9bda6aba3c17",
+        "symbol": "PSX",
+        "side": "BUY",
+        "quantity": 966.188228,
+        "fill_price": 121.2435,
+        "notional": 117144.0551,
+        "commission": 117.144055,
+        "realized_pnl": -27363.2783,
+        "timestamp": "2025-05-13T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "8a767916-cb18-4236-be49-cc65573ff56b",
+        "symbol": "QQQ",
+        "side": "BUY",
+        "quantity": 82.61326,
+        "fill_price": 516.7307,
+        "notional": 42688.8076,
+        "commission": 42.6888,
+        "stop_loss_price": 499.1753,
+        "take_profit_price": 569.3969,
+        "stop_loss": 499.1753,
+        "take_profit": 569.3969,
+        "r_multiple": 3.0,
+        "timestamp": "2025-05-14T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "f983937e-f2ab-425a-9d8c-14d840f6f906",
+        "symbol": "PDBC",
+        "side": "BUY",
+        "quantity": 3426.05953,
+        "fill_price": 12.46,
+        "notional": 42688.8489,
+        "commission": 42.6888,
+        "stop_loss_price": 12.2173,
+        "take_profit_price": 13.1883,
+        "stop_loss": 12.2173,
+        "take_profit": 13.1883,
+        "r_multiple": 3.0,
+        "timestamp": "2025-05-14T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "e273574a-271c-4bce-b7c3-59a9437519be",
+        "symbol": "RIOT",
+        "side": "BUY",
+        "quantity": 528.971321,
+        "fill_price": 8.9189,
+        "notional": 4717.8476,
+        "commission": 4.7178,
+        "stop_loss_price": 8.2946,
+        "take_profit_price": 10.7919,
+        "stop_loss": 8.2946,
+        "take_profit": 10.7919,
+        "r_multiple": 3.0,
+        "timestamp": "2025-05-14T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "5eeaec4b-5c26-40e9-a8cc-ee7bbb74d2f2",
+        "symbol": "V",
+        "side": "BUY",
+        "quantity": 289.571662,
+        "fill_price": 360.5661,
+        "notional": 104409.7272,
+        "commission": 104.409727,
+        "realized_pnl": -14616.2959,
+        "timestamp": "2025-05-15T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "5b20a5d0-9ab6-4f1c-badc-bc704263be7d",
+        "symbol": "RIVN",
+        "side": "BUY",
+        "quantity": 8028.545914,
+        "fill_price": 15.3153,
+        "notional": 122959.5908,
+        "commission": 122.959591,
+        "realized_pnl": -33184.5132,
+        "timestamp": "2025-05-15T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "aa0bd8bb-687b-42f6-b075-b86ee2cf2d29",
+        "symbol": "MDB",
+        "side": "BUY",
+        "quantity": 222.833582,
+        "fill_price": 191.4935,
+        "notional": 42671.1872,
+        "commission": 42.6712,
+        "stop_loss_price": 178.089,
+        "take_profit_price": 231.7072,
+        "stop_loss": 178.089,
+        "take_profit": 231.7072,
+        "r_multiple": 3.0,
+        "timestamp": "2025-05-16T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "8b4abc37-bfb7-4f78-870e-557dc467fe5d",
+        "symbol": "COST",
+        "side": "BUY",
+        "quantity": 41.725896,
+        "fill_price": 1022.6548,
+        "notional": 42671.1872,
+        "commission": 42.6712,
+        "stop_loss_price": 994.8079,
+        "take_profit_price": 1106.1955,
+        "stop_loss": 994.8079,
+        "take_profit": 1106.1955,
+        "r_multiple": 3.0,
+        "timestamp": "2025-05-16T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "51841fed-b270-4516-b26b-ab15226f7d9b",
+        "symbol": "ALNY",
+        "side": "SELL",
+        "quantity": 177.732898,
+        "fill_price": 289.5515,
+        "notional": 51462.8199,
+        "commission": 51.46282,
+        "realized_pnl": 5444.9908,
+        "timestamp": "2025-05-19T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "bull",
+        "strategy_bucket": "bull"
+      },
+      {
+        "id": "65c0dec7-12f1-4a07-aad5-8b6e97350c68",
+        "symbol": "HD",
+        "side": "BUY",
+        "quantity": 115.161244,
+        "fill_price": 370.4205,
+        "notional": 42658.0831,
+        "commission": 42.6581,
+        "stop_loss_price": 360.8959,
+        "take_profit_price": 398.9943,
+        "stop_loss": 360.8959,
+        "take_profit": 398.9943,
+        "r_multiple": 3.0,
+        "timestamp": "2025-05-19T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "1f73c4ee-5fbe-4c77-80bc-439ddb7d23d1",
+        "symbol": "ETHUSDT",
+        "side": "SELL",
+        "quantity": 20.798231,
+        "fill_price": 2737.7957,
+        "notional": 56941.3066,
+        "commission": 56.941307,
+        "realized_pnl": 10917.9912,
+        "timestamp": "2025-06-10T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "6e9f05ec-f934-480a-95f7-94d3c701eab3",
+        "symbol": "HAL",
+        "side": "BUY",
+        "quantity": 4776.21029,
+        "fill_price": 21.3685,
+        "notional": 102060.675,
+        "commission": 102.060675,
+        "realized_pnl": -12264.9056,
+        "timestamp": "2025-06-10T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "348794f9-0695-4855-badc-178a4367083d",
+        "symbol": "HAL",
+        "side": "BUY",
+        "quantity": 2005.793462,
+        "fill_price": 21.3699,
+        "notional": 42863.6424,
+        "commission": 42.8636,
+        "stop_loss_price": 20.2752,
+        "take_profit_price": 24.6541,
+        "stop_loss": 20.2752,
+        "take_profit": 24.6541,
+        "r_multiple": 3.0,
+        "timestamp": "2025-06-10T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "0b533d1a-d4c9-4e91-9fcd-58551ac52898",
+        "symbol": "MRK",
+        "side": "BUY",
+        "quantity": 545.465324,
+        "fill_price": 78.5819,
+        "notional": 42863.7234,
+        "commission": 42.8637,
+        "stop_loss_price": 75.6251,
+        "take_profit_price": 87.4526,
+        "stop_loss": 75.6251,
+        "take_profit": 87.4526,
+        "r_multiple": 3.0,
+        "timestamp": "2025-06-10T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "5df83531-1ad3-4b58-88c3-f8b4df567912",
+        "symbol": "PDBC",
+        "side": "SELL",
+        "quantity": 3426.05953,
+        "fill_price": 13.1751,
+        "notional": 45138.717,
+        "commission": 45.138717,
+        "realized_pnl": 2404.8765,
+        "timestamp": "2025-06-17T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "ee741bd5-5326-47a2-be8f-e58c213990af",
+        "symbol": "COP",
+        "side": "BUY",
+        "quantity": 458.746673,
+        "fill_price": 93.2222,
+        "notional": 42765.3697,
+        "commission": 42.7654,
+        "stop_loss_price": 89.4884,
+        "take_profit_price": 104.4237,
+        "stop_loss": 89.4884,
+        "take_profit": 104.4237,
+        "r_multiple": 3.0,
+        "timestamp": "2025-06-17T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "3648ada3-ad77-4ca8-b194-bbbbcb302f20",
+        "symbol": "HD",
+        "side": "SELL",
+        "quantity": 115.161244,
+        "fill_price": 341.953,
+        "notional": 39379.7356,
+        "commission": 39.379736,
+        "realized_pnl": -3317.7298,
+        "timestamp": "2025-06-17T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "bull",
+        "strategy_bucket": "bull"
+      },
+      {
+        "id": "2b6140dd-41d3-4bce-bb94-5e1aeaca0e8a",
+        "symbol": "XLE",
+        "side": "BUY",
+        "quantity": 1000.702551,
+        "fill_price": 42.7155,
+        "notional": 42745.5129,
+        "commission": 42.7455,
+        "stop_loss_price": 41.2999,
+        "take_profit_price": 46.9624,
+        "stop_loss": 41.2999,
+        "take_profit": 46.9624,
+        "r_multiple": 3.0,
+        "timestamp": "2025-06-18T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "55d78711-8e22-49da-ad92-d524f8937d13",
+        "symbol": "PGR",
+        "side": "SELL",
+        "quantity": 165.342922,
+        "fill_price": 244.2172,
+        "notional": 40379.5919,
+        "commission": 40.379592,
+        "realized_pnl": -3790.4829,
+        "timestamp": "2025-06-18T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "819976f2-9ea8-4f7d-9fd7-dc25b32eea4e",
+        "symbol": "BYND",
+        "side": "BUY",
+        "quantity": 12571.559958,
+        "fill_price": 3.3936,
+        "notional": 42662.9302,
+        "commission": 42.6629,
+        "stop_loss_price": 3.1561,
+        "take_profit_price": 4.1063,
+        "stop_loss": 3.1561,
+        "take_profit": 4.1063,
+        "r_multiple": 3.0,
+        "timestamp": "2025-06-19T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "05644a31-91f0-46d5-bb00-b214371ac1f0",
+        "symbol": "JPM",
+        "side": "SELL",
+        "quantity": 180.723187,
+        "fill_price": 273.4778,
+        "notional": 49423.7883,
+        "commission": 49.423788,
+        "realized_pnl": 4461.5803,
+        "timestamp": "2025-06-24T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "114cd3e3-ff83-4a3a-a61f-b8aa3fe5ee29",
+        "symbol": "COF",
+        "side": "BUY",
+        "quantity": 208.93858,
+        "fill_price": 204.456,
+        "notional": 42718.7488,
+        "commission": 42.7187,
+        "stop_loss_price": 194.2821,
+        "take_profit_price": 234.9778,
+        "stop_loss": 194.2821,
+        "take_profit": 234.9778,
+        "r_multiple": 3.0,
+        "timestamp": "2025-06-24T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "a81c727e-c1e7-4b8b-8b46-07bde594c035",
+        "symbol": "RIOT",
+        "side": "SELL",
+        "quantity": 528.971321,
+        "fill_price": 10.7811,
+        "notional": 5702.897,
+        "commission": 5.702897,
+        "realized_pnl": 979.3518,
+        "timestamp": "2025-06-30T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "db7c36e1-c24a-4705-aa9c-9b6fe8026f01",
+        "symbol": "HD",
+        "side": "BUY",
+        "quantity": 117.139132,
+        "fill_price": 360.2058,
+        "notional": 42194.1916,
+        "commission": 42.1942,
+        "stop_loss_price": 351.4204,
+        "take_profit_price": 386.562,
+        "stop_loss": 351.4204,
+        "take_profit": 386.562,
+        "r_multiple": 3.0,
+        "timestamp": "2025-06-30T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "25908449-9693-4c80-b7a0-d0f1cd27f52a",
+        "symbol": "ALB",
+        "side": "BUY",
+        "quantity": 1730.861796,
+        "fill_price": 73.5384,
+        "notional": 127284.7943,
+        "commission": 127.284794,
+        "realized_pnl": -37514.233,
+        "timestamp": "2025-07-10T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "178a40c8-8ca6-46cb-92ec-a580ab125480",
+        "symbol": "ETHUSDT",
+        "side": "BUY",
+        "quantity": 14.213939,
+        "fill_price": 2961.7352,
+        "notional": 42097.9237,
+        "commission": 42.0979,
+        "stop_loss_price": 2724.7964,
+        "take_profit_price": 3672.5517,
+        "stop_loss": 2724.7964,
+        "take_profit": 3672.5517,
+        "r_multiple": 3.0,
+        "timestamp": "2025-07-11T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "15f1f3f4-41d7-421f-9f7c-2e1dad135504",
+        "symbol": "COST",
+        "side": "SELL",
+        "quantity": 41.725896,
+        "fill_price": 946.4699,
+        "notional": 39492.3038,
+        "commission": 39.492304,
+        "realized_pnl": -3218.3763,
+        "timestamp": "2025-07-16T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "bull",
+        "strategy_bucket": "bull"
+      },
+      {
+        "id": "959d3379-413d-4744-bca9-e37e71c9eb73",
+        "symbol": "BLK",
+        "side": "BUY",
+        "quantity": 38.316787,
+        "fill_price": 1089.9522,
+        "notional": 41763.4675,
+        "commission": 41.7635,
+        "stop_loss_price": 1060.4298,
+        "take_profit_price": 1178.5196,
+        "stop_loss": 1060.4298,
+        "take_profit": 1178.5196,
+        "r_multiple": 3.0,
+        "timestamp": "2025-07-17T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "4e8fde3c-0feb-4eb0-8e1b-d867a734b7c9",
+        "symbol": "ETHUSDT",
+        "side": "SELL",
+        "quantity": 14.213939,
+        "fill_price": 3668.8791,
+        "notional": 52149.2244,
+        "commission": 52.149224,
+        "realized_pnl": 9999.1517,
+        "timestamp": "2025-07-20T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "92b51ff8-ffc7-4851-ae50-5b6ec1b86ae9",
+        "symbol": "ETHUSDT",
+        "side": "BUY",
+        "quantity": 11.16067,
+        "fill_price": 3766.99,
+        "notional": 42042.1328,
+        "commission": 42.0421,
+        "stop_loss_price": 3465.6308,
+        "take_profit_price": 4671.0677,
+        "stop_loss": 3465.6308,
+        "take_profit": 4671.0677,
+        "r_multiple": 3.0,
+        "timestamp": "2025-07-21T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "e9e1ad48-9534-4a6b-8ac8-884ad7435110",
+        "symbol": "BYND",
+        "side": "SELL",
+        "quantity": 12571.559958,
+        "fill_price": 4.1022,
+        "notional": 51570.9741,
+        "commission": 51.570974,
+        "realized_pnl": 8856.5572,
+        "timestamp": "2025-07-22T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "2a744f44-0748-4ffc-aba8-87e0609071b0",
+        "symbol": "BNBUSDT",
+        "side": "BUY",
+        "quantity": 53.752567,
+        "fill_price": 788.3375,
+        "notional": 42375.1644,
+        "commission": 42.3752,
+        "stop_loss_price": 730.3521,
+        "take_profit_price": 962.2936,
+        "stop_loss": 730.3521,
+        "take_profit": 962.2936,
+        "r_multiple": 3.0,
+        "timestamp": "2025-07-22T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "e9e780a7-a5f3-4707-9472-2968ca8ea479",
+        "symbol": "MDB",
+        "side": "SELL",
+        "quantity": 222.833582,
+        "fill_price": 231.4755,
+        "notional": 51580.5132,
+        "commission": 51.580513,
+        "realized_pnl": 8857.7502,
+        "timestamp": "2025-07-24T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "bull",
+        "strategy_bucket": "bull"
+      },
+      {
+        "id": "a97796d4-3341-44ea-b25b-ef05270b8e0a",
+        "symbol": "IYH",
+        "side": "BUY",
+        "quantity": 758.13089,
+        "fill_price": 56.518,
+        "notional": 42848.0285,
+        "commission": 42.848,
+        "stop_loss_price": 55.5146,
+        "take_profit_price": 59.5281,
+        "stop_loss": 55.5146,
+        "take_profit": 59.5281,
+        "r_multiple": 3.0,
+        "timestamp": "2025-07-24T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "aa2ad201-284e-4389-b3a1-07053f1b83b6",
+        "symbol": "QQQ",
+        "side": "SELL",
+        "quantity": 82.61326,
+        "fill_price": 568.8275,
+        "notional": 46992.6944,
+        "commission": 46.992694,
+        "realized_pnl": 4256.894,
+        "timestamp": "2025-08-08T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "bull",
+        "strategy_bucket": "bull"
+      },
+      {
+        "id": "cc47677c-b230-4a23-9b8b-b83c7fdabece",
+        "symbol": "GILD",
+        "side": "BUY",
+        "quantity": 363.972965,
+        "fill_price": 117.2677,
+        "notional": 42682.2852,
+        "commission": 42.6823,
+        "stop_loss_price": 113.4613,
+        "take_profit_price": 128.6869,
+        "stop_loss": 113.4613,
+        "take_profit": 128.6869,
+        "r_multiple": 3.0,
+        "timestamp": "2025-08-08T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "aeaaa495-2e80-4045-9d65-1618f00ad0bf",
+        "symbol": "HD",
+        "side": "SELL",
+        "quantity": 117.139132,
+        "fill_price": 386.1754,
+        "notional": 45236.2556,
+        "commission": 45.236256,
+        "realized_pnl": 2996.8246,
+        "timestamp": "2025-08-12T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "bull",
+        "strategy_bucket": "bull"
+      },
+      {
+        "id": "b9e2ce54-cf39-4ca1-b58d-7ecfaf03f7a9",
+        "symbol": "QQQ",
+        "side": "BUY",
+        "quantity": 74.262428,
+        "fill_price": 578.5192,
+        "notional": 42962.2409,
+        "commission": 42.9622,
+        "stop_loss_price": 569.5545,
+        "take_profit_price": 605.4134,
+        "stop_loss": 569.5545,
+        "take_profit": 605.4134,
+        "r_multiple": 3.0,
+        "timestamp": "2025-08-12T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      },
+      {
+        "id": "0a4c7e44-27de-4b73-9f5e-bf4198b9dc13",
+        "symbol": "ETHUSDT",
+        "side": "SELL",
+        "quantity": 11.16067,
+        "fill_price": 4666.3966,
+        "notional": 52080.1129,
+        "commission": 52.080113,
+        "realized_pnl": 9985.9005,
+        "timestamp": "2025-08-13T00:00:00+00:00",
+        "reason": "TP_HIT",
+        "agent_source": "crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "cf720de2-e0de-4251-9d20-95a53da78c5a",
+        "symbol": "ETHUSDT",
+        "side": "BUY",
+        "quantity": 9.125483,
+        "fill_price": 4766.6119,
+        "notional": 43497.6357,
+        "commission": 43.4976,
+        "stop_loss_price": 4385.2829,
+        "take_profit_price": 5910.5987,
+        "stop_loss": 4385.2829,
+        "take_profit": 5910.5987,
+        "r_multiple": 3.0,
+        "timestamp": "2025-08-13T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      },
+      {
+        "id": "b94a3e6c-4945-40da-9ab1-ad2c6ea7dec5",
+        "symbol": "ETHUSDT",
+        "side": "SELL",
+        "quantity": 9.125483,
+        "fill_price": 4067.4085,
+        "notional": 37117.0673,
+        "commission": 37.117067,
+        "realized_pnl": -6417.6856,
+        "timestamp": "2025-08-19T00:00:00+00:00",
+        "reason": "SL_HIT",
+        "agent_source": "crypto",
+        "strategy_bucket": "crypto"
+      },
+      {
+        "id": "b4b2c287-5180-49a1-94d5-ffb5f4ccfaef",
+        "symbol": "VNQ",
+        "side": "BUY",
+        "quantity": 490.743344,
+        "fill_price": 88.1817,
+        "notional": 43274.5822,
+        "commission": 43.2746,
+        "stop_loss_price": 87.0188,
+        "take_profit_price": 91.6703,
+        "stop_loss": 87.0188,
+        "take_profit": 91.6703,
+        "r_multiple": 3.0,
+        "timestamp": "2025-08-20T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "bull",
+        "strategy_bucket": "bull",
+        "mode": "institutional"
+      }
+    ],
+    "signal_summary": {
+      "signals_generated": 1,
+      "signals_approved": 2,
+      "signals_rejected": 0,
+      "rejection_reasons": {},
+      "current_signals": {
+        "NVDA": {
+          "type": "HOLD",
+          "score": 0.496
+        },
+        "SOXX": {
+          "type": "HOLD",
+          "score": 0.384
+        },
+        "QQQ": {
+          "type": "HOLD",
+          "score": 0.435
+        },
+        "AAPL": {
+          "type": "HOLD",
+          "score": 0.468
+        },
+        "MSFT": {
+          "type": "HOLD",
+          "score": 0.431
+        },
+        "GOOGL": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "META": {
+          "type": "HOLD",
+          "score": 0.18
+        },
+        "AMZN": {
+          "type": "HOLD",
+          "score": 0.355
+        },
+        "TSLA": {
+          "type": "HOLD",
+          "score": 0.377
+        },
+        "AVGO": {
+          "type": "HOLD",
+          "score": 0.55
+        },
+        "AMD": {
+          "type": "HOLD",
+          "score": 0.458
+        },
+        "CRM": {
+          "type": "HOLD",
+          "score": 0.353
+        },
+        "ORCL": {
+          "type": "HOLD",
+          "score": 0.308
+        },
+        "IBM": {
+          "type": "BUY",
+          "score": 0.631
+        },
+        "INTC": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "ASML": {
+          "type": "HOLD",
+          "score": 0.397
+        },
+        "TSM": {
+          "type": "HOLD",
+          "score": 0.321
+        },
+        "CSCO": {
+          "type": "HOLD",
+          "score": 0.308
+        },
+        "ADBE": {
+          "type": "HOLD",
+          "score": 0.369
+        },
+        "NFLX": {
+          "type": "HOLD",
+          "score": 0.566
+        },
+        "TXN": {
+          "type": "HOLD",
+          "score": 0.438
+        },
+        "QCOM": {
+          "type": "HOLD",
+          "score": 0.686
+        },
+        "SPY": {
+          "type": "HOLD",
+          "score": 0.302
+        },
+        "DIA": {
+          "type": "HOLD",
+          "score": 0.551
+        },
+        "IWM": {
+          "type": "HOLD",
+          "score": 0.426
+        },
+        "VTI": {
+          "type": "HOLD",
+          "score": 0.302
+        },
+        "VOO": {
+          "type": "HOLD",
+          "score": 0.302
+        },
+        "QQQM": {
+          "type": "HOLD",
+          "score": 0.435
+        },
+        "RSP": {
+          "type": "HOLD",
+          "score": 0.469
+        },
+        "XLK": {
+          "type": "HOLD",
+          "score": 0.384
+        },
+        "VGT": {
+          "type": "HOLD",
+          "score": 0.384
+        },
+        "IGV": {
+          "type": "HOLD",
+          "score": 0.254
+        },
+        "SMH": {
+          "type": "HOLD",
+          "score": 0.5
+        },
+        "BOTZ": {
+          "type": "HOLD",
+          "score": 0.455
+        },
+        "ARKK": {
+          "type": "HOLD",
+          "score": 0.384
+        },
+        "XLV": {
+          "type": "HOLD",
+          "score": 0.415
+        },
+        "VHT": {
+          "type": "HOLD",
+          "score": 0.437
+        },
+        "IBB": {
+          "type": "HOLD",
+          "score": 0.45
+        },
+        "XBI": {
+          "type": "HOLD",
+          "score": 0.61
+        },
+        "IYH": {
+          "type": "HOLD",
+          "score": 0.313
+        }
+      }
+    }
+  },
+  "system_health": {
+    "cycle_count": 160,
+    "uptime_seconds": 3668,
+    "paper_trading": true,
+    "agent_statuses": {
+      "market_data_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "macro_analyzer_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "sector_analyzer_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "stock_analyzer_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "news_data_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "technical_analysis_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "risk_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "execution_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "report_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "alpha_hunter_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "bull_strategy_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "bear_strategy_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "crypto_strategy_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "portfolio_manager": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "feature_store_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "ml_strategy_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "ml_cross_sectional_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "sentiment_analyzer_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "universe_discovery_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "universe_hygiene_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "auditor_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "adaptive_learner": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      }
+    }
+  },
+  "data_sources": {
+    "market_data_source": "historical_store",
+    "execution_mode": "simulation",
+    "portfolio_accounting": {
+      "retail_scope": "local_simulation",
+      "institutional_scope": "local_simulation",
+      "retail_equity_basis": "portfolio_mark_to_market",
+      "institutional_equity_basis": "portfolio_mark_to_market"
+    },
+    "openbb": {
+      "connected": false,
+      "provider": "yfinance",
+      "last_error": null
+    },
+    "ibkr": {
+      "connected": false,
+      "account_id": "",
+      "last_error": null
+    },
+    "world_monitor": {
+      "connected": false,
+      "mode": "stub",
+      "last_error": null,
+      "events_in_last_cycle": 0
+    }
+  }
+}

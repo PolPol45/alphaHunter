@@ -1,0 +1,1557 @@
+{
+  "report_id": "a4fdef8f-5abc-4fef-9c88-11718745bad0",
+  "generated_at": "2026-04-24T11:03:42.668946+00:00",
+  "combined": {
+    "total_equity": 999898.3,
+    "retail_equity": 20000.0,
+    "inst_equity": 979898.3
+  },
+  "retail": {
+    "portfolio_summary": {
+      "total_equity": 20000.0,
+      "cash": 20000.0,
+      "initial_capital": 20000.0,
+      "realized_pnl": 0.0,
+      "total_pnl": 0.0,
+      "total_pnl_pct": 0.0,
+      "peak_equity": 20000.0,
+      "drawdown_pct": 0.0,
+      "account_scope": "local_simulation",
+      "equity_basis": "portfolio_mark_to_market",
+      "configured_capital_share": 1.0,
+      "allocation_note": "Equity and cash are computed from this portfolio's own simulated positions.",
+      "exit_breakdown": {}
+    },
+    "open_positions": {},
+    "new_trades": [],
+    "signal_summary": {
+      "signals_generated": 44,
+      "signals_approved": 0,
+      "signals_rejected": 0,
+      "rejection_reasons": {},
+      "current_signals": {
+        "BTCUSDT": {
+          "type": "HOLD",
+          "score": 0.217
+        },
+        "ETHUSDT": {
+          "type": "HOLD",
+          "score": 0.407
+        },
+        "SOLUSDT": {
+          "type": "HOLD",
+          "score": 0.255
+        },
+        "NVDA": {
+          "type": "SELL",
+          "score": 0.694
+        },
+        "SOXX": {
+          "type": "HOLD",
+          "score": 0.523
+        },
+        "QQQ": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "SNAP": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "LYFT": {
+          "type": "HOLD",
+          "score": 0.293
+        },
+        "UBER": {
+          "type": "HOLD",
+          "score": 0.409
+        },
+        "DASH": {
+          "type": "HOLD",
+          "score": 0.595
+        },
+        "RBLX": {
+          "type": "HOLD",
+          "score": 0.4
+        },
+        "RIVN": {
+          "type": "BUY",
+          "score": 0.711
+        },
+        "LCID": {
+          "type": "BUY",
+          "score": 0.537
+        },
+        "CHPT": {
+          "type": "HOLD",
+          "score": 0.301
+        },
+        "BYND": {
+          "type": "SELL",
+          "score": 0.532
+        },
+        "SPCE": {
+          "type": "HOLD",
+          "score": 0.475
+        },
+        "WKHS": {
+          "type": "HOLD",
+          "score": 0.382
+        },
+        "SKLZ": {
+          "type": "SELL",
+          "score": 0.561
+        },
+        "CLOV": {
+          "type": "HOLD",
+          "score": 0.407
+        },
+        "BB": {
+          "type": "HOLD",
+          "score": 0.523
+        },
+        "AMC": {
+          "type": "SELL",
+          "score": 0.611
+        },
+        "GME": {
+          "type": "HOLD",
+          "score": 0.456
+        },
+        "BBBY": {
+          "type": "HOLD",
+          "score": 0.217
+        },
+        "PTON": {
+          "type": "HOLD",
+          "score": 0.53
+        },
+        "ZM": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "TDOC": {
+          "type": "SELL",
+          "score": 0.693
+        },
+        "CVNA": {
+          "type": "HOLD",
+          "score": 0.523
+        },
+        "OPEN": {
+          "type": "HOLD",
+          "score": 0.475
+        },
+        "HYLN": {
+          "type": "HOLD",
+          "score": 0.432
+        },
+        "W": {
+          "type": "HOLD",
+          "score": 0.255
+        },
+        "ETSY": {
+          "type": "HOLD",
+          "score": 0.255
+        },
+        "SHOP": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "SE": {
+          "type": "HOLD",
+          "score": 0.481
+        },
+        "GRAB": {
+          "type": "HOLD",
+          "score": 0.323
+        },
+        "BABA": {
+          "type": "HOLD",
+          "score": 0.392
+        },
+        "JD": {
+          "type": "HOLD",
+          "score": 0.526
+        },
+        "PDD": {
+          "type": "HOLD",
+          "score": 0.282
+        },
+        "NIO": {
+          "type": "SELL",
+          "score": 0.532
+        },
+        "LI": {
+          "type": "SELL",
+          "score": 0.741
+        },
+        "XPEV": {
+          "type": "HOLD",
+          "score": 0.316
+        },
+        "BRCC": {
+          "type": "HOLD",
+          "score": 0.255
+        },
+        "SRFM": {
+          "type": "HOLD",
+          "score": 0.448
+        },
+        "FUBO": {
+          "type": "SELL",
+          "score": 0.763
+        },
+        "PAYO": {
+          "type": "HOLD",
+          "score": 0.281
+        },
+        "BKKT": {
+          "type": "HOLD",
+          "score": 0.368
+        },
+        "PSFE": {
+          "type": "HOLD",
+          "score": 0.255
+        },
+        "OPFI": {
+          "type": "HOLD",
+          "score": 0.255
+        },
+        "PLTR": {
+          "type": "HOLD",
+          "score": 0.533
+        },
+        "SOFI": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "PATH": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "AI": {
+          "type": "HOLD",
+          "score": 0.448
+        },
+        "IONQ": {
+          "type": "HOLD",
+          "score": 0.255
+        },
+        "RKLB": {
+          "type": "HOLD",
+          "score": 0.255
+        },
+        "UPST": {
+          "type": "HOLD",
+          "score": 0.448
+        },
+        "AFRM": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "LMND": {
+          "type": "HOLD",
+          "score": 0.52
+        },
+        "FSLY": {
+          "type": "HOLD",
+          "score": 0.566
+        },
+        "NET": {
+          "type": "HOLD",
+          "score": 0.447
+        },
+        "CRWD": {
+          "type": "HOLD",
+          "score": 0.28
+        },
+        "ZS": {
+          "type": "HOLD",
+          "score": 0.376
+        },
+        "OKTA": {
+          "type": "HOLD",
+          "score": 0.615
+        },
+        "SNOW": {
+          "type": "SELL",
+          "score": 0.586
+        },
+        "DDOG": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "MDB": {
+          "type": "HOLD",
+          "score": 0.382
+        },
+        "TWLO": {
+          "type": "HOLD",
+          "score": 0.419
+        },
+        "DOCU": {
+          "type": "HOLD",
+          "score": 0.355
+        },
+        "SPOT": {
+          "type": "SELL",
+          "score": 0.741
+        },
+        "CRSP": {
+          "type": "HOLD",
+          "score": 0.539
+        },
+        "EDIT": {
+          "type": "HOLD",
+          "score": 0.448
+        },
+        "NTLA": {
+          "type": "HOLD",
+          "score": 0.404
+        },
+        "PACB": {
+          "type": "HOLD",
+          "score": 0.465
+        },
+        "BEAM": {
+          "type": "HOLD",
+          "score": 0.404
+        },
+        "TXG": {
+          "type": "HOLD",
+          "score": 0.475
+        },
+        "GH": {
+          "type": "HOLD",
+          "score": 0.362
+        },
+        "ILMN": {
+          "type": "HOLD",
+          "score": 0.42
+        },
+        "SRPT": {
+          "type": "HOLD",
+          "score": 0.475
+        },
+        "ALNY": {
+          "type": "BUY",
+          "score": 0.459
+        },
+        "BNTX": {
+          "type": "HOLD",
+          "score": 0.523
+        },
+        "MRNA": {
+          "type": "HOLD",
+          "score": 0.458
+        },
+        "NVS": {
+          "type": "HOLD",
+          "score": 0.24
+        },
+        "DXCM": {
+          "type": "HOLD",
+          "score": 0.539
+        },
+        "COIN": {
+          "type": "HOLD",
+          "score": 0.515
+        },
+        "MSTR": {
+          "type": "HOLD",
+          "score": 0.398
+        },
+        "MARA": {
+          "type": "HOLD",
+          "score": 0.255
+        },
+        "RIOT": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "HUT": {
+          "type": "HOLD",
+          "score": 0.324
+        },
+        "CLSK": {
+          "type": "HOLD",
+          "score": 0.368
+        },
+        "CIFR": {
+          "type": "SELL",
+          "score": 0.586
+        },
+        "IREN": {
+          "type": "HOLD",
+          "score": 0.331
+        },
+        "WULF": {
+          "type": "HOLD",
+          "score": 0.331
+        },
+        "BITF": {
+          "type": "HOLD",
+          "score": 0.475
+        },
+        "HOOD": {
+          "type": "HOLD",
+          "score": 0.255
+        },
+        "PYPL": {
+          "type": "HOLD",
+          "score": 0.381
+        },
+        "MQ": {
+          "type": "HOLD",
+          "score": 0.282
+        },
+        "CCJ": {
+          "type": "HOLD",
+          "score": 0.28
+        },
+        "UUUU": {
+          "type": "HOLD",
+          "score": 0.539
+        },
+        "UEC": {
+          "type": "SELL",
+          "score": 0.611
+        },
+        "NXE": {
+          "type": "HOLD",
+          "score": 0.448
+        },
+        "ALB": {
+          "type": "HOLD",
+          "score": 0.539
+        },
+        "SGML": {
+          "type": "HOLD",
+          "score": 0.407
+        },
+        "SQM": {
+          "type": "HOLD",
+          "score": 0.523
+        },
+        "TECK": {
+          "type": "HOLD",
+          "score": 0.523
+        },
+        "CLF": {
+          "type": "HOLD",
+          "score": 0.475
+        },
+        "AA": {
+          "type": "HOLD",
+          "score": 0.539
+        },
+        "CENX": {
+          "type": "HOLD",
+          "score": 0.452
+        },
+        "AAPL": {
+          "type": "HOLD",
+          "score": 0.289
+        },
+        "MSFT": {
+          "type": "HOLD",
+          "score": 0.309
+        },
+        "GOOGL": {
+          "type": "HOLD",
+          "score": 0.502
+        },
+        "META": {
+          "type": "HOLD",
+          "score": 0.502
+        },
+        "AMZN": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "TSLA": {
+          "type": "HOLD",
+          "score": 0.331
+        },
+        "AVGO": {
+          "type": "HOLD",
+          "score": 0.601
+        },
+        "AMD": {
+          "type": "HOLD",
+          "score": 0.679
+        },
+        "CRM": {
+          "type": "HOLD",
+          "score": 0.448
+        },
+        "ORCL": {
+          "type": "SELL",
+          "score": 0.586
+        },
+        "IBM": {
+          "type": "HOLD",
+          "score": 0.272
+        },
+        "INTC": {
+          "type": "HOLD",
+          "score": 0.263
+        },
+        "ASML": {
+          "type": "HOLD",
+          "score": 0.523
+        },
+        "TSM": {
+          "type": "HOLD",
+          "score": 0.406
+        },
+        "CSCO": {
+          "type": "HOLD",
+          "score": 0.229
+        },
+        "ADBE": {
+          "type": "HOLD",
+          "score": 0.517
+        },
+        "NFLX": {
+          "type": "HOLD",
+          "score": 0.604
+        },
+        "TXN": {
+          "type": "HOLD",
+          "score": 0.379
+        },
+        "QCOM": {
+          "type": "SELL",
+          "score": 0.772
+        },
+        "AMAT": {
+          "type": "SELL",
+          "score": 0.586
+        },
+        "INTU": {
+          "type": "HOLD",
+          "score": 0.41
+        },
+        "MU": {
+          "type": "SELL",
+          "score": 0.586
+        },
+        "NOW": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "LRCX": {
+          "type": "HOLD",
+          "score": 0.465
+        },
+        "UNH": {
+          "type": "BUY",
+          "score": 0.54
+        },
+        "JNJ": {
+          "type": "HOLD",
+          "score": 0.386
+        },
+        "LLY": {
+          "type": "HOLD",
+          "score": 0.517
+        },
+        "ABBV": {
+          "type": "HOLD",
+          "score": 0.415
+        },
+        "MRK": {
+          "type": "SELL",
+          "score": 0.532
+        },
+        "PFE": {
+          "type": "HOLD",
+          "score": 0.301
+        },
+        "AMGN": {
+          "type": "HOLD",
+          "score": 0.457
+        },
+        "TMO": {
+          "type": "HOLD",
+          "score": 0.404
+        },
+        "DHR": {
+          "type": "HOLD",
+          "score": 0.424
+        },
+        "ABT": {
+          "type": "HOLD",
+          "score": 0.497
+        },
+        "BMY": {
+          "type": "HOLD",
+          "score": 0.31
+        },
+        "SYK": {
+          "type": "HOLD",
+          "score": 0.4
+        },
+        "CVS": {
+          "type": "HOLD",
+          "score": 0.47
+        },
+        "CI": {
+          "type": "HOLD",
+          "score": 0.389
+        },
+        "ZTS": {
+          "type": "HOLD",
+          "score": 0.255
+        },
+        "BSX": {
+          "type": "HOLD",
+          "score": 0.416
+        },
+        "GILD": {
+          "type": "HOLD",
+          "score": 0.415
+        },
+        "MDT": {
+          "type": "SELL",
+          "score": 0.603
+        },
+        "ELV": {
+          "type": "HOLD",
+          "score": 0.399
+        },
+        "VRTX": {
+          "type": "HOLD",
+          "score": 0.519
+        },
+        "REGN": {
+          "type": "HOLD",
+          "score": 0.475
+        },
+        "HCA": {
+          "type": "BUY",
+          "score": 0.612
+        },
+        "BDX": {
+          "type": "HOLD",
+          "score": 0.342
+        },
+        "HUM": {
+          "type": "HOLD",
+          "score": 0.314
+        },
+        "ISRG": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "JPM": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "V": {
+          "type": "HOLD",
+          "score": 0.496
+        },
+        "MA": {
+          "type": "HOLD",
+          "score": 0.496
+        },
+        "BAC": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "WFC": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "MS": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "GS": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "BX": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "C": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "SPGI": {
+          "type": "BUY",
+          "score": 0.537
+        },
+        "AXP": {
+          "type": "HOLD",
+          "score": 0.309
+        },
+        "MCO": {
+          "type": "HOLD",
+          "score": 0.28
+        },
+        "SCHW": {
+          "type": "HOLD",
+          "score": 0.464
+        },
+        "BLK": {
+          "type": "HOLD",
+          "score": 0.39
+        },
+        "CB": {
+          "type": "HOLD",
+          "score": 0.383
+        },
+        "PGR": {
+          "type": "HOLD",
+          "score": 0.415
+        },
+        "CME": {
+          "type": "HOLD",
+          "score": 0.47
+        },
+        "USB": {
+          "type": "HOLD",
+          "score": 0.431
+        },
+        "PNC": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "TFC": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "ICE": {
+          "type": "HOLD",
+          "score": 0.415
+        },
+        "AON": {
+          "type": "HOLD",
+          "score": 0.456
+        },
+        "COF": {
+          "type": "HOLD",
+          "score": 0.431
+        },
+        "AFL": {
+          "type": "HOLD",
+          "score": 0.262
+        },
+        "XOM": {
+          "type": "HOLD",
+          "score": 0.434
+        },
+        "CVX": {
+          "type": "HOLD",
+          "score": 0.434
+        },
+        "COP": {
+          "type": "HOLD",
+          "score": 0.383
+        },
+        "NEM": {
+          "type": "BUY",
+          "score": 0.594
+        },
+        "FCX": {
+          "type": "HOLD",
+          "score": 0.486
+        },
+        "EOG": {
+          "type": "HOLD",
+          "score": 0.496
+        },
+        "SLB": {
+          "type": "HOLD",
+          "score": 0.398
+        },
+        "MPC": {
+          "type": "HOLD",
+          "score": 0.464
+        },
+        "PSX": {
+          "type": "HOLD",
+          "score": 0.316
+        },
+        "VLO": {
+          "type": "HOLD",
+          "score": 0.362
+        },
+        "OXY": {
+          "type": "HOLD",
+          "score": 0.57
+        },
+        "WMB": {
+          "type": "BUY",
+          "score": 0.665
+        },
+        "KMI": {
+          "type": "BUY",
+          "score": 0.732
+        },
+        "HAL": {
+          "type": "HOLD",
+          "score": 0.385
+        },
+        "BKR": {
+          "type": "HOLD",
+          "score": 0.461
+        },
+        "DVN": {
+          "type": "BUY",
+          "score": 0.814
+        },
+        "FANG": {
+          "type": "BUY",
+          "score": 0.754
+        },
+        "TRGP": {
+          "type": "HOLD",
+          "score": 0.438
+        },
+        "CTRA": {
+          "type": "BUY",
+          "score": 0.54
+        },
+        "NTR": {
+          "type": "SELL",
+          "score": 0.586
+        },
+        "SCCO": {
+          "type": "HOLD",
+          "score": 0.429
+        },
+        "NUE": {
+          "type": "HOLD",
+          "score": 0.619
+        },
+        "STLD": {
+          "type": "HOLD",
+          "score": 0.289
+        },
+        "RS": {
+          "type": "HOLD",
+          "score": 0.398
+        },
+        "WMT": {
+          "type": "HOLD",
+          "score": 0.331
+        },
+        "PG": {
+          "type": "HOLD",
+          "score": 0.41
+        },
+        "HD": {
+          "type": "HOLD",
+          "score": 0.289
+        },
+        "COST": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "MCD": {
+          "type": "HOLD",
+          "score": 0.503
+        },
+        "PEP": {
+          "type": "HOLD",
+          "score": 0.347
+        },
+        "KO": {
+          "type": "HOLD",
+          "score": 0.584
+        },
+        "TM": {
+          "type": "HOLD",
+          "score": 0.547
+        },
+        "NKE": {
+          "type": "SELL",
+          "score": 0.586
+        },
+        "BA": {
+          "type": "BUY",
+          "score": 0.54
+        },
+        "CAT": {
+          "type": "HOLD",
+          "score": 0.463
+        },
+        "LMT": {
+          "type": "HOLD",
+          "score": 0.411
+        },
+        "RTX": {
+          "type": "HOLD",
+          "score": 0.404
+        },
+        "DE": {
+          "type": "HOLD",
+          "score": 0.24
+        },
+        "UNP": {
+          "type": "HOLD",
+          "score": 0.379
+        },
+        "SPY": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "DIA": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "IWM": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "VTI": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "VOO": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "QQQM": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "RSP": {
+          "type": "HOLD",
+          "score": 0.289
+        },
+        "XLK": {
+          "type": "SELL",
+          "score": 0.651
+        },
+        "VGT": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "IGV": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "SMH": {
+          "type": "SELL",
+          "score": 0.586
+        },
+        "BOTZ": {
+          "type": "HOLD",
+          "score": 0.523
+        },
+        "ARKK": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "XLV": {
+          "type": "HOLD",
+          "score": 0.335
+        },
+        "VHT": {
+          "type": "HOLD",
+          "score": 0.388
+        },
+        "IBB": {
+          "type": "HOLD",
+          "score": 0.404
+        },
+        "XBI": {
+          "type": "HOLD",
+          "score": 0.404
+        },
+        "IYH": {
+          "type": "HOLD",
+          "score": 0.335
+        },
+        "XLF": {
+          "type": "HOLD",
+          "score": 0.41
+        },
+        "VFH": {
+          "type": "HOLD",
+          "score": 0.289
+        },
+        "KRE": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "KBE": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "XLE": {
+          "type": "BUY",
+          "score": 0.665
+        },
+        "VDE": {
+          "type": "BUY",
+          "score": 0.665
+        },
+        "XOP": {
+          "type": "BUY",
+          "score": 0.661
+        },
+        "OIH": {
+          "type": "HOLD",
+          "score": 0.362
+        },
+        "XLB": {
+          "type": "HOLD",
+          "score": 0.289
+        },
+        "VAW": {
+          "type": "HOLD",
+          "score": 0.289
+        },
+        "XLI": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "VIS": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "XLY": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "VCR": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "XLC": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "VOX": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "XLU": {
+          "type": "HOLD",
+          "score": 0.362
+        },
+        "VPU": {
+          "type": "HOLD",
+          "score": 0.457
+        },
+        "VNQ": {
+          "type": "HOLD",
+          "score": 0.347
+        },
+        "SCHH": {
+          "type": "HOLD",
+          "score": 0.347
+        },
+        "GLD": {
+          "type": "HOLD",
+          "score": 0.402
+        },
+        "IAU": {
+          "type": "HOLD",
+          "score": 0.402
+        },
+        "SLV": {
+          "type": "HOLD",
+          "score": 0.282
+        },
+        "PPLT": {
+          "type": "HOLD",
+          "score": 0.319
+        },
+        "USO": {
+          "type": "BUY",
+          "score": 0.54
+        },
+        "BNO": {
+          "type": "BUY",
+          "score": 0.54
+        },
+        "UNG": {
+          "type": "HOLD",
+          "score": 0.347
+        },
+        "DBA": {
+          "type": "HOLD",
+          "score": 0.365
+        },
+        "PDBC": {
+          "type": "HOLD",
+          "score": 0.381
+        },
+        "DBC": {
+          "type": "BUY",
+          "score": 0.643
+        },
+        "SH": {
+          "type": "HOLD",
+          "score": 0.456
+        },
+        "PSQ": {
+          "type": "HOLD",
+          "score": 0.456
+        },
+        "DOG": {
+          "type": "HOLD",
+          "score": 0.47
+        },
+        "SDS": {
+          "type": "HOLD",
+          "score": 0.456
+        },
+        "QID": {
+          "type": "HOLD",
+          "score": 0.456
+        },
+        "SPXS": {
+          "type": "HOLD",
+          "score": 0.456
+        },
+        "SQQQ": {
+          "type": "HOLD",
+          "score": 0.456
+        },
+        "SDOW": {
+          "type": "HOLD",
+          "score": 0.47
+        },
+        "TZA": {
+          "type": "HOLD",
+          "score": 0.54
+        },
+        "FAZ": {
+          "type": "HOLD",
+          "score": 0.465
+        },
+        "YANG": {
+          "type": "HOLD",
+          "score": 0.289
+        },
+        "EDZ": {
+          "type": "HOLD",
+          "score": 0.507
+        },
+        "VXX": {
+          "type": "HOLD",
+          "score": 0.456
+        },
+        "UVXY": {
+          "type": "BUY",
+          "score": 0.629
+        },
+        "VIXY": {
+          "type": "HOLD",
+          "score": 0.456
+        },
+        "TLT": {
+          "type": "HOLD",
+          "score": 0.282
+        },
+        "IEF": {
+          "type": "BUY",
+          "score": 0.538
+        },
+        "SHY": {
+          "type": "HOLD",
+          "score": 0.443
+        },
+        "SGOL": {
+          "type": "HOLD",
+          "score": 0.307
+        },
+        "SOXS": {
+          "type": "BUY",
+          "score": 0.594
+        },
+        "LABD": {
+          "type": "HOLD",
+          "score": 0.326
+        },
+        "DRV": {
+          "type": "HOLD",
+          "score": 0.317
+        }
+      }
+    }
+  },
+  "institutional": {
+    "portfolio_summary": {
+      "total_equity": 979898.3013,
+      "cash": 930898.3013,
+      "initial_capital": 980000.0,
+      "realized_pnl": 0.0,
+      "total_pnl": -101.6987,
+      "total_pnl_pct": -0.000104,
+      "peak_equity": 980000.0,
+      "drawdown_pct": 0.000104,
+      "account_scope": "local_simulation",
+      "equity_basis": "portfolio_mark_to_market",
+      "configured_capital_share": 1.0,
+      "allocation_note": "Equity and cash are computed from this portfolio's own simulated positions.",
+      "exit_breakdown": {}
+    },
+    "open_positions": {
+      "DVN": {
+        "quantity": 1338.009384,
+        "avg_entry_price": 36.6609,
+        "current_price": 36.6216,
+        "unrealized_pnl": -52.6282,
+        "unrealized_pnl_pct": -0.001073,
+        "position_value_usdt": 49000.0,
+        "stop_loss_price": 35.2862,
+        "take_profit_price": 40.7852,
+        "r_multiple": 3.0,
+        "trailing_high": 36.6609,
+        "entry_atr": 0.9155,
+        "side": "long",
+        "opened_at": "2026-04-24T11:03:17.160537+00:00",
+        "stop_loss": 35.2862,
+        "take_profit": 40.7852,
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "asset_role": "commodity_cyclical",
+        "vwap_at_entry": 36.261402
+      }
+    },
+    "new_trades": [
+      {
+        "id": "6ac6645f-395b-4c99-877e-27848cf18546",
+        "symbol": "DVN",
+        "side": "BUY",
+        "quantity": 1338.009384,
+        "fill_price": 36.6609,
+        "notional": 49052.646,
+        "commission": 49.0526,
+        "stop_loss_price": 35.2862,
+        "take_profit_price": 40.7852,
+        "stop_loss": 35.2862,
+        "take_profit": 40.7852,
+        "r_multiple": 3.0,
+        "timestamp": "2025-04-01T00:00:00+00:00",
+        "reason": "SIGNAL_BUY",
+        "source": "simulation",
+        "agent_source": "ta_crypto",
+        "strategy_bucket": "crypto",
+        "mode": "institutional"
+      }
+    ],
+    "signal_summary": {
+      "signals_generated": 0,
+      "signals_approved": 1,
+      "signals_rejected": 0,
+      "rejection_reasons": {},
+      "current_signals": {
+        "NVDA": {
+          "type": "HOLD",
+          "score": 0.694
+        },
+        "SOXX": {
+          "type": "HOLD",
+          "score": 0.523
+        },
+        "QQQ": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "AAPL": {
+          "type": "HOLD",
+          "score": 0.289
+        },
+        "MSFT": {
+          "type": "HOLD",
+          "score": 0.309
+        },
+        "GOOGL": {
+          "type": "HOLD",
+          "score": 0.502
+        },
+        "META": {
+          "type": "HOLD",
+          "score": 0.502
+        },
+        "AMZN": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "TSLA": {
+          "type": "HOLD",
+          "score": 0.331
+        },
+        "AVGO": {
+          "type": "HOLD",
+          "score": 0.601
+        },
+        "AMD": {
+          "type": "HOLD",
+          "score": 0.679
+        },
+        "CRM": {
+          "type": "HOLD",
+          "score": 0.448
+        },
+        "ORCL": {
+          "type": "HOLD",
+          "score": 0.586
+        },
+        "IBM": {
+          "type": "HOLD",
+          "score": 0.272
+        },
+        "INTC": {
+          "type": "HOLD",
+          "score": 0.263
+        },
+        "ASML": {
+          "type": "HOLD",
+          "score": 0.523
+        },
+        "TSM": {
+          "type": "HOLD",
+          "score": 0.515
+        },
+        "CSCO": {
+          "type": "HOLD",
+          "score": 0.229
+        },
+        "ADBE": {
+          "type": "HOLD",
+          "score": 0.517
+        },
+        "NFLX": {
+          "type": "HOLD",
+          "score": 0.604
+        },
+        "TXN": {
+          "type": "HOLD",
+          "score": 0.379
+        },
+        "QCOM": {
+          "type": "HOLD",
+          "score": 0.772
+        },
+        "SPY": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "DIA": {
+          "type": "HOLD",
+          "score": 0.375
+        },
+        "IWM": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "VTI": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "VOO": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "QQQM": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "RSP": {
+          "type": "HOLD",
+          "score": 0.289
+        },
+        "XLK": {
+          "type": "HOLD",
+          "score": 0.651
+        },
+        "VGT": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "IGV": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "SMH": {
+          "type": "HOLD",
+          "score": 0.586
+        },
+        "BOTZ": {
+          "type": "HOLD",
+          "score": 0.523
+        },
+        "ARKK": {
+          "type": "HOLD",
+          "score": 0.364
+        },
+        "XLV": {
+          "type": "HOLD",
+          "score": 0.335
+        },
+        "VHT": {
+          "type": "HOLD",
+          "score": 0.388
+        },
+        "IBB": {
+          "type": "HOLD",
+          "score": 0.404
+        },
+        "XBI": {
+          "type": "HOLD",
+          "score": 0.404
+        },
+        "IYH": {
+          "type": "HOLD",
+          "score": 0.335
+        }
+      }
+    }
+  },
+  "system_health": {
+    "cycle_count": 0,
+    "uptime_seconds": 66,
+    "paper_trading": true,
+    "agent_statuses": {
+      "market_data_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "macro_analyzer_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "sector_analyzer_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "stock_analyzer_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "news_data_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "technical_analysis_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "risk_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "execution_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "report_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "alpha_hunter_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "bull_strategy_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "bear_strategy_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "crypto_strategy_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "portfolio_manager": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "feature_store_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "ml_strategy_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "ml_cross_sectional_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "sentiment_analyzer_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "universe_discovery_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "universe_hygiene_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "auditor_agent": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      },
+      "adaptive_learner": {
+        "status": "idle",
+        "last_run": null,
+        "last_error": null
+      }
+    }
+  },
+  "data_sources": {
+    "market_data_source": "historical_store",
+    "execution_mode": "simulation",
+    "portfolio_accounting": {
+      "retail_scope": "local_simulation",
+      "institutional_scope": "local_simulation",
+      "retail_equity_basis": "portfolio_mark_to_market",
+      "institutional_equity_basis": "portfolio_mark_to_market"
+    },
+    "openbb": {
+      "connected": false,
+      "provider": "yfinance",
+      "last_error": null
+    },
+    "ibkr": {
+      "connected": false,
+      "account_id": "",
+      "last_error": null
+    },
+    "world_monitor": {
+      "connected": false,
+      "mode": "stub",
+      "last_error": null,
+      "events_in_last_cycle": 0
+    }
+  }
+}
