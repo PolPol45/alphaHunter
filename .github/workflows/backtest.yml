@@ -1,6 +1,9 @@
 name: Walk-Forward Backtest
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       start_date:
