@@ -11,6 +11,10 @@ on:
         description: "Backtest end date (YYYY-MM-DD)"
         required: true
         default: "2026-04-18"
+      strict_quality_gate:
+        description: "Fail the workflow when the comparative quality gate fails"
+        required: false
+        default: "false"
 
 permissions:
   contents: write
@@ -104,6 +108,56 @@ jobs:
                   print(f"  total_return={ret:.2f}%  ({eq[0]:.0f} -> {eq[-1]:.0f})")
           PY
 
+      - name: Generate delta report + quality gate
+        if: success()
+        env:
+          TARGET_BRANCH: backtest-reports
+          MAX_RETURN_DROP_PP: "5.0"
+          MAX_SHARPE_DROP: "0.50"
+          MAX_DD_INCREASE: "0.05"
+          ENFORCE_QUALITY_GATE: ${{ github.event.inputs.strict_quality_gate || 'false' }}
+        run: |
+          set -euo pipefail
+
+          CURRENT_REPORT=$(ls -1t reports/backtest_report_*.json 2>/dev/null | head -1 || true)
+          if [ -z "${CURRENT_REPORT}" ]; then
+            echo "No current report found; skipping delta gate."
+            exit 0
+          fi
+
+          git fetch origin "${TARGET_BRANCH}" --depth=1 2>/dev/null || true
+          PREV_REPORT_PATH=$(git ls-tree -r --name-only "origin/${TARGET_BRANCH}" 2>/dev/null | grep '^reports/backtest_report_.*\.json$' | grep -v '\.bak$' | sort | tail -1 || true)
+
+          if [ -z "${PREV_REPORT_PATH}" ]; then
+            echo "No previous published report found on ${TARGET_BRANCH}; skipping gate."
+            {
+              echo "## Backtest Delta Report"
+              echo
+              echo "Current: \`${CURRENT_REPORT}\`"
+              echo "Previous: not available on ${TARGET_BRANCH}"
+              echo
+              echo "Quality Gate: **SKIPPED**"
+            } > "reports/backtest_delta_${GITHUB_RUN_ID}.md"
+
+            cat "reports/backtest_delta_${GITHUB_RUN_ID}.md" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          mkdir -p /tmp/backtest_gate
+          PREV_LOCAL="/tmp/backtest_gate/previous_report.json"
+          git show "origin/${TARGET_BRANCH}:${PREV_REPORT_PATH}" > "${PREV_LOCAL}"
+
+          python scripts/backtest_delta_report.py             --current "${CURRENT_REPORT}"             --previous "${PREV_LOCAL}"             --json-out "reports/backtest_delta_${GITHUB_RUN_ID}.json"             --md-out "reports/backtest_delta_${GITHUB_RUN_ID}.md"             --gate-out "reports/quality_gate_${GITHUB_RUN_ID}.json"             --max-return-drop-pp "${MAX_RETURN_DROP_PP}"             --max-sharpe-drop "${MAX_SHARPE_DROP}"             --max-dd-increase "${MAX_DD_INCREASE}" || GATE_EXIT=$?
+
+          cat "reports/backtest_delta_${GITHUB_RUN_ID}.md" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${ENFORCE_QUALITY_GATE}" = "true" ] && [ "${GATE_EXIT:-0}" -ne 0 ]; then
+            echo "::error::Quality gate failed. See delta report in step summary/artifacts."
+            exit "${GATE_EXIT}"
+          elif [ "${GATE_EXIT:-0}" -ne 0 ]; then
+            echo "::warning::Quality gate failed but workflow is in soft mode; publishing continues."
+          fi
+
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -118,6 +172,9 @@ jobs:
             logs/backtesting_agent.log
             data/portfolio_institutional.json
             data/portfolio_retail.json
+            reports/backtest_delta_*.json
+            reports/backtest_delta_*.md
+            reports/quality_gate_*.json
 
       - name: Publish reports to backtest-reports branch
         if: success()
@@ -125,28 +182,51 @@ jobs:
           TARGET_BRANCH: backtest-reports
         run: |
           set -euo pipefail
-          REPORT=$(ls reports/backtest_report_*.json 2>/dev/null | head -1)
-          if [ -z "$REPORT" ]; then echo "No report to publish."; exit 0; fi
+          mkdir -p /tmp/publish_src
+          cp -f reports/backtest_report_*.json /tmp/publish_src/ 2>/dev/null || true
+          cp -f reports/backtest_delta_*.json /tmp/publish_src/ 2>/dev/null || true
+          cp -f reports/backtest_delta_*.md /tmp/publish_src/ 2>/dev/null || true
+          cp -f reports/quality_gate_*.json /tmp/publish_src/ 2>/dev/null || true
+
+          if ! ls /tmp/publish_src/backtest_report_*.json >/dev/null 2>&1; then
+            echo "No report to publish."
+            exit 0
+          fi
 
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git fetch origin "${TARGET_BRANCH}" 2>/dev/null || true
 
+          WORKTREE_DIR="/tmp/publish_worktree"
+          rm -rf "${WORKTREE_DIR}"
+
           if git show-ref --verify --quiet "refs/remotes/origin/${TARGET_BRANCH}"; then
-            git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+            git worktree add --force "${WORKTREE_DIR}" "origin/${TARGET_BRANCH}"
           else
-            git checkout --orphan "${TARGET_BRANCH}"
-            git rm -rf . >/dev/null 2>&1 || true
-            mkdir -p reports && touch reports/.gitkeep
-            git add reports/.gitkeep
-            git commit -m "chore: init ${TARGET_BRANCH}"
+            git worktree add --force -b "${TARGET_BRANCH}" "${WORKTREE_DIR}" HEAD
+            (
+              cd "${WORKTREE_DIR}"
+              git rm -rf . >/dev/null 2>&1 || true
+              mkdir -p reports
+              touch reports/.gitkeep
+              git add reports/.gitkeep
+              git commit -m "chore: init ${TARGET_BRANCH}" || true
+            )
           fi
 
-          mkdir -p reports
-          cp reports/backtest_report_*.json reports/ 2>/dev/null || true
+          mkdir -p "${WORKTREE_DIR}/reports"
+          cp -f /tmp/publish_src/* "${WORKTREE_DIR}/reports/"
 
-          git add reports/
-          if git diff --cached --quiet; then echo "No changes."; exit 0; fi
-          git commit -m "backtest: run ${GITHUB_RUN_ID} ($(date -u +%Y-%m-%d))"
-          git push origin "${TARGET_BRANCH}"
+          (
+            cd "${WORKTREE_DIR}"
+            git add reports/
+            if git diff --cached --quiet; then
+              echo "No changes."
+              exit 0
+            fi
+            git commit -m "backtest: run ${GITHUB_RUN_ID} ($(date -u +%Y-%m-%d))"
+            git push origin "${TARGET_BRANCH}"
+          )
+
+          git worktree remove --force "${WORKTREE_DIR}"

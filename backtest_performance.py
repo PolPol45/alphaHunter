@@ -56,6 +56,19 @@ def load_reports() -> list[dict]:
     return out
 
 
+def load_delta_reports() -> list[dict]:
+    files = sorted(glob.glob(str(REPORTS_DIR / "backtest_delta_*.json")))
+    out = []
+    for fp in files:
+        try:
+            d = json.loads(pathlib.Path(fp).read_text(encoding="utf-8"))
+            d["_file"] = pathlib.Path(fp).name
+            out.append(d)
+        except Exception:
+            pass
+    return out
+
+
 # ── UI helpers ────────────────────────────────────────────────────────────────
 
 def _layout(**kw):
@@ -715,6 +728,76 @@ def sec_variance(reports):
     return _section("5 — Variance & Distribuzione dei Ritorni", figs)
 
 
+def sec_delta(delta_reports):
+    from dash import html
+
+    if not delta_reports:
+        return _section(
+            "6 — Delta vs Previous Run",
+            _explain("Nessun delta report disponibile. Esegui il workflow GitHub con quality gate per generarlo."),
+        )
+
+    latest = delta_reports[-1]
+    gate = latest.get("quality_gate", {}) or {}
+    delta = latest.get("delta", {}) or {}
+    current = latest.get("current", {}) or {}
+    previous = latest.get("previous", {}) or {}
+
+    gate_passed = bool(gate.get("passed", False))
+    gate_color = GREEN if gate_passed else RED
+    gate_label = "PASS" if gate_passed else "FAIL"
+    violations = gate.get("violations", []) or []
+
+    cards = html.Div([
+        _metric("Gate", gate_label, "quality gate comparativo", gate_color),
+        _metric("Delta Return", f"{delta.get('return_pct_points', 0.0):+.2f}pp",
+                f"curr {current.get('return_pct', 0.0):.2f}% vs prev {previous.get('return_pct', 0.0):.2f}%",
+                GREEN if delta.get("return_pct_points", 0.0) >= 0 else RED),
+        _metric("Delta Sharpe", f"{delta.get('sharpe', 0.0):+.3f}",
+                f"curr {current.get('sharpe', 0.0):.3f} vs prev {previous.get('sharpe', 0.0):.3f}",
+                GREEN if delta.get("sharpe", 0.0) >= 0 else RED),
+        _metric("Delta Max DD", f"{delta.get('max_drawdown', 0.0) * 100:+.2f}pp",
+                f"curr {current.get('max_drawdown', 0.0) * 100:.2f}% vs prev {previous.get('max_drawdown', 0.0) * 100:.2f}%",
+                GREEN if delta.get("max_drawdown", 0.0) <= 0 else RED),
+        _metric("Delta Win Rate", f"{delta.get('win_rate', 0.0) * 100:+.2f}pp",
+                f"curr {current.get('win_rate', 0.0) * 100:.2f}% vs prev {previous.get('win_rate', 0.0) * 100:.2f}%",
+                GREEN if delta.get("win_rate", 0.0) >= 0 else RED),
+        _metric("Delta PnL", f"${delta.get('pnl', 0.0):+,.0f}",
+                f"curr ${current.get('pnl', 0.0):,.0f} vs prev ${previous.get('pnl', 0.0):,.0f}",
+                GREEN if delta.get("pnl", 0.0) >= 0 else RED),
+    ], style={"display": "flex", "gap": "8px", "flexWrap": "wrap"})
+
+    violations_box = html.Div(
+        [
+            html.Div("Violazioni Gate", style={"color": RED, "fontWeight": "700", "marginBottom": "8px"}),
+            html.Ul([html.Li(v, style={"color": SUBTEXT, "marginBottom": "4px"}) for v in violations]),
+        ],
+        style={
+            "background": CARD_L,
+            "border": f"1px solid {RED}",
+            "borderRadius": "6px",
+            "padding": "12px 14px",
+            "marginTop": "12px",
+            "display": "block" if violations else "none",
+        },
+    )
+
+    info = html.Div(
+        f"Source: {latest.get('_file', 'n/a')} | Current: {latest.get('current_report', 'n/a')} | Previous: {latest.get('previous_report', 'n/a')}",
+        style={"color": SUBTEXT, "fontSize": "11px", "marginTop": "10px"},
+    )
+
+    return _section("6 — Delta vs Previous Run", [
+        cards,
+        violations_box,
+        info,
+        _explain(
+            "Questa sezione mostra il confronto automatico tra l'ultimo report backtest e la baseline precedente. "
+            "Il gate fallisce se il rendimento peggiora oltre soglia, se Sharpe degrada troppo, o se il max drawdown aumenta oltre limite."
+        ),
+    ])
+
+
 # ── App assembly ──────────────────────────────────────────────────────────────
 
 def build_app(port: int):
@@ -722,6 +805,7 @@ def build_app(port: int):
     from dash import html
 
     reports = load_reports()
+    delta_reports = load_delta_reports()
     print(f"  Report backtest trovati: {len(reports)}")
     for r in reports:
         w = r.get("window", {})
@@ -745,6 +829,7 @@ def build_app(port: int):
             sec_strategy(reports),
             sec_decisions(reports),
             sec_variance(reports),
+            sec_delta(delta_reports),
         ], style={"padding": "20px 32px"}),
     ], style={"background": BG, "minHeight": "100vh", "fontFamily": "monospace"})
 
